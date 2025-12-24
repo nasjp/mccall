@@ -160,5 +160,5 @@
     - UIスタイルガイドに従った最終的な見た目の調整を実施
     - _要件: 非機能要件の最適化_
 
-- [ ] 16. GitHub ActionsのCIを追加（In Progress）
+- [x] 16. GitHub ActionsのCIを追加（Done）
   - bun/rustのチェックを自動実行するワークフローを追加
