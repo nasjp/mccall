@@ -53,6 +53,7 @@ pub struct TimerEngine {
     cycles_completed: u32,
     pending_check_in: Option<PendingCheckIn>,
     pending_check_in_event: Option<CheckInEvent>,
+    pending_check_in_timeout: Option<usize>,
     last_check_in: Option<CheckInResult>,
 }
 
@@ -85,6 +86,12 @@ impl TimerEngine {
             .and_then(|routine| routine.steps.get(self.current_step_index))
     }
 
+    pub fn step_at(&self, index: usize) -> Option<&Step> {
+        self.routine
+            .as_ref()
+            .and_then(|routine| routine.steps.get(index))
+    }
+
     pub fn start_routine(&mut self, routine: Routine) -> Result<(), TimerError> {
         if self.is_running() {
             return Err(TimerError::AlreadyRunning);
@@ -100,6 +107,7 @@ impl TimerEngine {
         self.cycles_completed = 0;
         self.pending_check_in = None;
         self.pending_check_in_event = None;
+        self.pending_check_in_timeout = None;
         self.last_check_in = None;
         self.routine = Some(routine);
         Ok(())
@@ -141,6 +149,7 @@ impl TimerEngine {
         self.cycles_completed = 0;
         self.pending_check_in = None;
         self.pending_check_in_event = None;
+        self.pending_check_in_timeout = None;
         self.last_check_in = None;
         Ok(())
     }
@@ -211,6 +220,7 @@ impl TimerEngine {
         };
         self.last_check_in = Some(result);
         self.pending_check_in_event = None;
+        self.pending_check_in_timeout = None;
         match pending.mode {
             CheckInMode::Gate => {
                 let now = Instant::now();
@@ -220,12 +230,34 @@ impl TimerEngine {
         }
     }
 
+    pub fn skip_current_step(&mut self) -> Result<AdvanceResult, TimerError> {
+        if !self.is_running() {
+            return Err(TimerError::NotRunning);
+        }
+        if let Some(pending) = &self.pending_check_in {
+            if pending.mode == CheckInMode::Gate && pending.step_index == self.current_step_index {
+                return self.respond_to_check_in(CheckInChoice::Skip);
+            }
+        }
+        let paused_at = self.paused_at;
+        let now = paused_at.unwrap_or_else(Instant::now);
+        let result = self.advance_from_index(self.current_step_index, Duration::ZERO, now)?;
+        if paused_at.is_some() {
+            self.paused_at = paused_at;
+        }
+        Ok(result)
+    }
+
     pub fn last_check_in_result(&self) -> Option<&CheckInResult> {
         self.last_check_in.as_ref()
     }
 
     pub fn take_check_in_event(&mut self) -> Option<CheckInEvent> {
         self.pending_check_in_event.take()
+    }
+
+    pub fn take_check_in_timeout(&mut self) -> Option<usize> {
+        self.pending_check_in_timeout.take()
     }
 
     fn validate_routine(routine: &Routine) -> Result<(), TimerError> {
@@ -421,15 +453,22 @@ impl TimerEngine {
     }
 
     fn expire_prompt_if_needed(&mut self, now: Instant) {
-        let is_timed_out = match &self.pending_check_in {
+        let timed_out_step = match &self.pending_check_in {
             Some(pending) if pending.mode == CheckInMode::Prompt => pending
                 .timeout
-                .map(|timeout| now.duration_since(pending.requested_at) >= timeout)
-                .unwrap_or(false),
-            _ => false,
+                .map(|timeout| {
+                    if now.duration_since(pending.requested_at) >= timeout {
+                        Some(pending.step_index)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(None),
+            _ => None,
         };
-        if is_timed_out {
+        if let Some(step_index) = timed_out_step {
             self.pending_check_in = None;
+            self.pending_check_in_timeout = Some(step_index);
             self.last_check_in = Some(CheckInResult {
                 mode: CheckInMode::Prompt,
                 responded_at: None,
@@ -707,5 +746,38 @@ mod tests {
         let last = engine.last_check_in_result().expect("last check-in");
         assert!(last.timed_out);
         assert!(last.choice.is_none());
+        assert_eq!(engine.take_check_in_timeout(), Some(0));
+        assert_eq!(engine.take_check_in_timeout(), None);
+    }
+
+    #[test]
+    fn skip_advances_to_next_step() {
+        let steps = vec![sample_step("step-1", 60), sample_step("step-2", 60)];
+        let routine = routine_with_steps(steps, RepeatMode::Infinite);
+        let mut engine = TimerEngine::new();
+        engine.start_routine(routine).expect("start routine");
+
+        let result = engine.skip_current_step().expect("skip step");
+        assert!(matches!(
+            result,
+            AdvanceResult::StepAdvanced { step_index: 1 }
+        ));
+        assert_eq!(engine.current_step_index(), Some(1));
+    }
+
+    #[test]
+    fn skip_keeps_pause_state() {
+        let steps = vec![sample_step("step-1", 60), sample_step("step-2", 60)];
+        let routine = routine_with_steps(steps, RepeatMode::Infinite);
+        let mut engine = TimerEngine::new();
+        engine.start_routine(routine).expect("start routine");
+        engine.pause().expect("pause");
+
+        let result = engine.skip_current_step().expect("skip step");
+        assert!(matches!(
+            result,
+            AdvanceResult::StepAdvanced { step_index: 1 }
+        ));
+        assert!(engine.is_paused());
     }
 }
