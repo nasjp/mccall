@@ -28,7 +28,7 @@
     - リピートモード（infinite/count/duration）の処理を実装
     - _要件: 2.2, 2.6_
 
-  - [ ] 3.3 Check-in機能の実装（In Progress）
+  - [x] 3.3 Check-in機能の実装（Done）
     - off/prompt/gateの3モードでのCheck-in処理を実装
     - タイムアウト処理とレスポンス記録機能を実装
     - _要件: 3.1, 3.2, 3.3, 3.4, 3.5_

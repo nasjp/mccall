@@ -2,6 +2,8 @@ mod commands;
 #[allow(dead_code)]
 mod data_manager;
 mod models;
+#[allow(dead_code)]
+mod timer_engine;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
