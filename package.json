@@ -8,8 +8,19 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
     "lint": "biome check --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "rust:test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "rust:fmt": "cargo fmt --manifest-path src-tauri/Cargo.toml",
+    "rust:clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "ci": "bun run lint && bun run typecheck && bun run test && bun run rust:fmt && bun run rust:clippy && bun run rust:test",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:headed": "playwright test --headed",
+    "e2e:debug": "PWDEBUG=1 playwright test --headed",
+    "e2e:report": "playwright show-report"
   },
   "dependencies": {
     "react": "^19.1.0",
@@ -19,11 +30,17 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
+    "@playwright/test": "^1.57.0",
     "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.1",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "jsdom": "^27.3.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.0.16"
   }
 }
