@@ -1,6 +1,6 @@
 # 実装計画
 
-- [ ] 1. プロジェクト構造とコア型定義の設定
+- [x] 1. プロジェクト構造とコア型定義の設定（Done）
   - Rustでのデータモデル（Routine, Step, Session等）の型定義を作成
   - TypeScriptでのフロントエンド型定義を作成
   - Tauri commandsの基本構造を定義
