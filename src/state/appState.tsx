@@ -64,6 +64,7 @@ type AppAction =
   | { type: "initialize"; timerState: TimerState; routines: Routine[] }
   | { type: "set-current-view"; view: AppState["currentView"] }
   | { type: "set-current-routine"; routineId: string | null }
+  | { type: "upsert-routine"; routine: Routine }
   | { type: "timer-tick"; remainingSeconds: number }
   | { type: "step-changed"; step: Step; stepIndex: number }
   | { type: "check-in-required"; checkIn: CheckInConfig; step: Step }
@@ -78,6 +79,16 @@ const findRoutineById = (routines: Routine[], routineId: string | null) => {
     return undefined;
   }
   return routines.find((routine) => routine.id === routineId);
+};
+
+const upsertRoutine = (routines: Routine[], routine: Routine) => {
+  const index = routines.findIndex((item) => item.id === routine.id);
+  if (index === -1) {
+    return [...routines, routine];
+  }
+  const next = [...routines];
+  next[index] = routine;
+  return next;
 };
 
 const findRoutineByStepId = (routines: Routine[], stepId: string) =>
@@ -107,6 +118,19 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
         ...state,
         currentRoutine: findRoutineById(state.routines, action.routineId),
       };
+    case "upsert-routine": {
+      const nextRoutines = upsertRoutine(state.routines, action.routine);
+      const currentRoutine =
+        state.currentRoutine?.id === action.routine.id
+          ? action.routine
+          : (state.currentRoutine ??
+            (state.routines.length === 0 ? action.routine : undefined));
+      return {
+        ...state,
+        routines: nextRoutines,
+        currentRoutine: currentRoutine ?? state.currentRoutine,
+      };
+    }
     case "timer-tick":
       return {
         ...state,

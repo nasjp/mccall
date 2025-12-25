@@ -253,20 +253,33 @@ body {
 }
 
 .routine-editor__item {
-  padding: var(--space-8) var(--space-12);
-  border-radius: var(--radius-button);
-  background-color: ButtonFace;
-  border: 1px solid transparent;
+  list-style: none;
 }
 
 .routine-editor__empty {
   list-style: none;
 }
 
-.routine-editor__item--active {
+.routine-editor__item-button {
+  width: 100%;
+  text-align: left;
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-button);
+  background-color: ButtonFace;
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: inherit;
+}
+
+.routine-editor__item-button--active {
   border-color: ButtonBorder;
   background-color: Canvas;
   font-weight: 600;
+}
+
+.routine-editor__item-button:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
 }
 
 .routine-editor__item-title {
@@ -295,9 +308,50 @@ body {
   color: GrayText;
 }
 
+.routine-editor__form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.routine-editor__form-row {
+  display: flex;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.routine-editor__label {
+  font-size: 12px;
+  color: GrayText;
+}
+
+.routine-editor__input,
+.routine-editor__select {
+  border: 1px solid ButtonBorder;
+  border-radius: var(--radius-button);
+  padding: 6px 10px;
+  font-size: 13px;
+  background-color: Field;
+  color: FieldText;
+}
+
+.routine-editor__input--short {
+  width: 120px;
+}
+
+.routine-editor__steps-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
 .routine-editor__steps {
   display: grid;
   gap: var(--space-8);
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .routine-editor__step {
@@ -310,6 +364,11 @@ body {
   background-color: ButtonFace;
 }
 
+.routine-editor__step-main {
+  display: grid;
+  gap: var(--space-4);
+}
+
 .routine-editor__step-label {
   font-size: 14px;
 }
@@ -317,6 +376,17 @@ body {
 .routine-editor__step-meta {
   font-size: 12px;
   color: GrayText;
+}
+
+.routine-editor__step-actions {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.button--compact {
+  padding: 4px 10px;
+  font-size: 12px;
 }
 
 .stats-view {

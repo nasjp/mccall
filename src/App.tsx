@@ -7,7 +7,7 @@ import { RoutineEditor } from "./components/RoutineEditor";
 import { TimerView } from "./components/TimerView";
 import { useTimerShortcuts } from "./hooks/useTimerShortcuts";
 import { AppStateProvider, useAppState } from "./state/appState";
-import type { CheckInChoice } from "./types/mccall";
+import type { CheckInChoice, Routine } from "./types/mccall";
 
 const AppContent = () => {
   const { state, dispatch } = useAppState();
@@ -64,6 +64,25 @@ const AppContent = () => {
       console.error("Failed to stop timer", error);
     }
   }, []);
+
+  const upsertRoutine = useCallback(
+    async (routine: Routine) => {
+      dispatch({ type: "upsert-routine", routine });
+      try {
+        await invoke("save_routine", { routine });
+      } catch (error) {
+        console.error("Failed to save routine", error);
+      }
+    },
+    [dispatch],
+  );
+
+  const selectRoutine = useCallback(
+    (routineId: string) => {
+      dispatch({ type: "set-current-routine", routineId });
+    },
+    [dispatch],
+  );
 
   useEffect(() => {
     if (checkInKey) {
@@ -125,7 +144,12 @@ const AppContent = () => {
   let content = null;
   if (state.currentView === "editor") {
     content = (
-      <RoutineEditor routines={state.routines} currentRoutine={activeRoutine} />
+      <RoutineEditor
+        routines={state.routines}
+        currentRoutine={activeRoutine}
+        onSelectRoutine={selectRoutine}
+        onUpsertRoutine={upsertRoutine}
+      />
     );
   } else if (state.currentView === "stats") {
     content = (

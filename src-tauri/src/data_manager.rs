@@ -192,7 +192,10 @@ mod tests {
     use crate::models::{Session, SessionTotals};
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     fn temp_dir() -> PathBuf {
         let mut dir = std::env::temp_dir();
@@ -200,7 +203,11 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("time went backwards")
             .as_nanos();
-        dir.push(format!("mccall_test_{nanos}"));
+        let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+        dir.push(format!(
+            "mccall_test_{nanos}_{counter}_{}",
+            std::process::id()
+        ));
         fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }

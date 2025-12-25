@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import type { Routine } from "../types/mccall";
 import { RoutineEditor } from "./RoutineEditor";
 
@@ -38,11 +39,18 @@ const buildRoutine = (overrides?: Partial<Routine>): Routine => ({
 });
 
 describe("RoutineEditor", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   test("renders empty state when no routines", () => {
     render(<RoutineEditor routines={[]} currentRoutine={undefined} />);
 
     expect(screen.getByText("ルーチンがありません")).toBeInTheDocument();
     expect(screen.getByText("ルーチンを選択してください")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "新規ルーチン" }),
+    ).toBeInTheDocument();
   });
 
   test("renders routine list and details", () => {
@@ -50,9 +58,53 @@ describe("RoutineEditor", () => {
 
     render(<RoutineEditor routines={[routine]} currentRoutine={routine} />);
 
-    expect(screen.getAllByText("朝のルーチン")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: /朝のルーチン/ })).toBeVisible();
+    expect(screen.getByLabelText("名前")).toHaveValue("朝のルーチン");
     expect(screen.getByText("2 steps")).toBeInTheDocument();
     expect(screen.getByText("準備")).toBeInTheDocument();
     expect(screen.getByText("集中")).toBeInTheDocument();
+  });
+
+  test("creates routine from the new button", async () => {
+    const user = userEvent.setup();
+    const onUpsertRoutine = vi.fn();
+    const onSelectRoutine = vi.fn();
+
+    render(
+      <RoutineEditor
+        routines={[]}
+        currentRoutine={undefined}
+        onUpsertRoutine={onUpsertRoutine}
+        onSelectRoutine={onSelectRoutine}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "新規ルーチン" }));
+
+    expect(onUpsertRoutine).toHaveBeenCalledTimes(1);
+    const created = onUpsertRoutine.mock.calls[0][0] as Routine;
+    expect(created.name).toBe("新しいルーチン");
+    expect(created.steps).toHaveLength(1);
+    expect(onSelectRoutine).toHaveBeenCalledWith(created.id);
+  });
+
+  test("adds steps to the routine", async () => {
+    const user = userEvent.setup();
+    const onUpsertRoutine = vi.fn();
+    const routine = buildRoutine();
+
+    render(
+      <RoutineEditor
+        routines={[routine]}
+        currentRoutine={routine}
+        onUpsertRoutine={onUpsertRoutine}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "ステップを追加" }));
+
+    const lastCall =
+      onUpsertRoutine.mock.calls[onUpsertRoutine.mock.calls.length - 1][0];
+    expect(lastCall.steps).toHaveLength(3);
   });
 });

@@ -142,6 +142,17 @@ describe("appReducer", () => {
     expect(nextState.currentRoutine?.id).toBe(routine.id);
   });
 
+  test("upsert-routine adds routine and selects when empty", () => {
+    const routine = buildRoutine();
+    const nextState = appReducer(initialAppState, {
+      type: "upsert-routine",
+      routine,
+    });
+
+    expect(nextState.routines).toHaveLength(1);
+    expect(nextState.currentRoutine?.id).toBe(routine.id);
+  });
+
   test("check-in-timeout clears awaiting check-in", () => {
     const promptCheckIn: CheckInConfig = {
       mode: "prompt",
