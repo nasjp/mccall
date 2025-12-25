@@ -1,8 +1,12 @@
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import type { Routine, TimerState } from "../types/mccall";
 import { TimerView } from "./TimerView";
+
+afterEach(() => {
+  cleanup();
+});
 
 const buildRoutine = (overrides?: Partial<Routine>): Routine => ({
   id: "routine-1",
@@ -54,5 +58,34 @@ describe("TimerView", () => {
 
     expect(screen.getByText("ステップ未設定")).toBeInTheDocument();
     expect(screen.getByText("ルーチンを作成してください")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+  });
+
+  test("shows pause and resume based on running state", () => {
+    const routine = buildRoutine();
+    const onPause = vi.fn();
+    const onResume = vi.fn();
+
+    const { rerender } = render(
+      <TimerView
+        routine={routine}
+        timerState={buildTimerState({ isRunning: true, isPaused: false })}
+        onPause={onPause}
+        onResume={onResume}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Pause" })).toBeEnabled();
+
+    rerender(
+      <TimerView
+        routine={routine}
+        timerState={buildTimerState({ isRunning: true, isPaused: true })}
+        onPause={onPause}
+        onResume={onResume}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Resume" })).toBeEnabled();
   });
 });
