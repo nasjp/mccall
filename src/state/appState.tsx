@@ -72,7 +72,12 @@ type AppErrorPayload = {
 };
 
 type AppAction =
-  | { type: "initialize"; timerState: TimerState; routines: Routine[] }
+  | {
+      type: "initialize";
+      timerState: TimerState;
+      routines: Routine[];
+      settings: AppSettings;
+    }
   | { type: "set-current-view"; view: AppState["currentView"] }
   | { type: "set-current-routine"; routineId: string | null }
   | { type: "upsert-routine"; routine: Routine }
@@ -155,6 +160,7 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
         ...state,
         timerState: action.timerState,
         routines: action.routines,
+        settings: action.settings,
         currentRoutine,
       };
     }
@@ -296,14 +302,15 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
 
     const loadInitialState = async () => {
       try {
-        const [timerState, routines] = await Promise.all([
+        const [timerState, routines, settings] = await Promise.all([
           invoke<TimerState>("get_timer_state"),
           invoke<Routine[]>("load_routines"),
+          invoke<AppSettings>("load_settings"),
         ]);
         if (disposed) {
           return;
         }
-        dispatch({ type: "initialize", timerState, routines });
+        dispatch({ type: "initialize", timerState, routines, settings });
       } catch (error) {
         console.error("Failed to load initial state", error);
         if (!disposed) {

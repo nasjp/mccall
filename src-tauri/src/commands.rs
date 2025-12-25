@@ -3,7 +3,7 @@ use crate::audio_manager::AudioManager;
 use crate::data_manager::DataManager;
 use crate::events::emit_app_error;
 use crate::menu_bar;
-use crate::models::{CheckInResponse, Routine, SessionStats, TimerState};
+use crate::models::{AppSettings, CheckInResponse, Routine, SessionStats, TimerState};
 use crate::runtime_state::RuntimeState;
 use crate::session_recovery;
 use crate::session_stats::calculate_session_stats;
@@ -97,6 +97,28 @@ pub async fn load_routines(
     data_manager
         .load_routines()
         .map_err(|err| report_error(&app, AppError::from(err)))
+}
+
+#[tauri::command]
+pub async fn load_settings(
+    data_manager: State<'_, DataManager>,
+    app: AppHandle,
+) -> Result<AppSettings, String> {
+    data_manager
+        .load_settings()
+        .map_err(|err| report_error(&app, AppError::from(err)))
+}
+
+#[tauri::command]
+pub async fn save_settings(
+    settings: AppSettings,
+    data_manager: State<'_, DataManager>,
+    app: AppHandle,
+) -> Result<(), String> {
+    data_manager
+        .save_settings(&settings)
+        .map_err(|err| report_error(&app, AppError::from(err)))?;
+    Ok(())
 }
 
 #[tauri::command]

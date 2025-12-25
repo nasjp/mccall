@@ -1,6 +1,6 @@
 use crate::models::{
-    CheckInConfig, CheckInMode, RepeatMode, Routine, Session, SoundOverride, SoundScheme,
-    SoundSetting, Step,
+    AppSettings, CheckInConfig, CheckInMode, RepeatMode, Routine, Session, SoundOverride,
+    SoundScheme, SoundSetting, Step,
 };
 use crate::recovery_state::ActiveSessionSnapshot;
 use chrono::DateTime;
@@ -80,6 +80,9 @@ impl DataManager {
         if !manager.sessions_path.exists() {
             manager.write_json(&manager.sessions_path, &Vec::<Session>::new())?;
         }
+        if !manager.settings_path.exists() {
+            manager.write_json(&manager.settings_path, &AppSettings::default())?;
+        }
 
         let routines = manager.load_routines()?;
         if routines.is_empty() {
@@ -146,6 +149,22 @@ impl DataManager {
         }
         let sessions = serde_json::from_str(&contents)?;
         Ok(sessions)
+    }
+
+    pub fn load_settings(&self) -> DataResult<AppSettings> {
+        if !self.settings_path.exists() {
+            return Ok(AppSettings::default());
+        }
+        let contents = fs::read_to_string(&self.settings_path)?;
+        if contents.trim().is_empty() {
+            return Ok(AppSettings::default());
+        }
+        let settings = serde_json::from_str(&contents)?;
+        Ok(settings)
+    }
+
+    pub fn save_settings(&self, settings: &AppSettings) -> DataResult<()> {
+        self.write_json(&self.settings_path, settings)
     }
 
     pub fn load_active_session(&self) -> DataResult<Option<ActiveSessionSnapshot>> {
@@ -330,7 +349,7 @@ fn template_step(
 #[cfg(test)]
 mod tests {
     use super::{DataError, DataManager};
-    use crate::models::{CheckInMode, Session, SessionTotals};
+    use crate::models::{AppSettings, CheckInMode, Session, SessionTotals, SoundSetting};
     use std::fs;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -496,6 +515,36 @@ mod tests {
         fs::write(manager.sessions_path(), "[not json]").expect("write sessions");
         let err = manager.load_sessions().expect_err("should fail");
         assert!(matches!(err, DataError::Serde(_)));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_and_load_settings_roundtrip() {
+        let dir = temp_dir();
+        let manager = DataManager::new(&dir).expect("create manager");
+        let settings = AppSettings {
+            notifications_enabled: false,
+            sound_default: SoundSetting::Off,
+        };
+
+        manager.save_settings(&settings).expect("save settings");
+        let loaded = manager.load_settings().expect("load settings");
+
+        assert_eq!(loaded, settings);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_settings_returns_default_for_empty_file() {
+        let dir = temp_dir();
+        let manager = DataManager::new(&dir).expect("create manager");
+
+        fs::write(manager.settings_path(), "").expect("write settings");
+        let loaded = manager.load_settings().expect("load settings");
+
+        assert_eq!(loaded, AppSettings::default());
 
         let _ = fs::remove_dir_all(&dir);
     }

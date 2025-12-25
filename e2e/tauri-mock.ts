@@ -1,5 +1,10 @@
 import type { Page } from "@playwright/test";
-import type { Routine, SessionStats, TimerState } from "../src/types/mccall";
+import type {
+  AppSettings,
+  Routine,
+  SessionStats,
+  TimerState,
+} from "../src/types/mccall";
 
 type NotificationPermission = "default" | "denied" | "granted";
 
@@ -40,6 +45,7 @@ type NotificationConstructor = {
 type TauriMockOptions = {
   routines?: Routine[];
   timerState?: TimerState;
+  settings?: AppSettings;
   sessionStats?: SessionStatsBundle;
   notificationPermission?: NotificationPermission;
 };
@@ -61,6 +67,11 @@ const defaultStats: SessionStats = {
   muteRate: 0,
 };
 
+const defaultSettings: AppSettings = {
+  notificationsEnabled: true,
+  soundDefault: "on",
+};
+
 export const installTauriMock = async (
   page: Page,
   options: TauriMockOptions = {},
@@ -71,14 +82,17 @@ export const installTauriMock = async (
       timerState,
       sessionStats,
       notificationPermission,
+      settings,
     }: {
       routines: Routine[];
       timerState: TimerState;
       sessionStats: SessionStatsBundle;
       notificationPermission: NotificationPermission;
+      settings: AppSettings;
     }) => {
       let routinesState = routines;
       let timerStateValue = timerState;
+      let settingsState = settings;
       const stats = sessionStats;
       const invocations: Invocation[] = [];
       const callbacks = new Map<
@@ -147,6 +161,8 @@ export const installTauriMock = async (
               return timerStateValue;
             case "load_routines":
               return routinesState;
+            case "load_settings":
+              return settingsState;
             case "save_routine": {
               const routine = args.routine as Routine | undefined;
               if (routine) {
@@ -160,6 +176,13 @@ export const installTauriMock = async (
                   next[index] = routine;
                   routinesState = next;
                 }
+              }
+              return null;
+            }
+            case "save_settings": {
+              const next = args.settings as AppSettings | undefined;
+              if (next) {
+                settingsState = next;
               }
               return null;
             }
@@ -219,6 +242,7 @@ export const installTauriMock = async (
     {
       routines: options.routines ?? [],
       timerState: options.timerState ?? defaultTimerState,
+      settings: options.settings ?? defaultSettings,
       sessionStats: options.sessionStats ?? {
         today: defaultStats,
         week: defaultStats,

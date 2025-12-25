@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
-import type { Routine, TimerState } from "./types/mccall";
+import type { AppSettings, Routine, TimerState } from "./types/mccall";
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const listenMock = vi.hoisted(() => vi.fn());
@@ -64,13 +64,25 @@ const buildTimerState = (overrides?: Partial<TimerState>): TimerState => ({
   ...overrides,
 });
 
-const setupInvoke = (timerState: TimerState, routines: Routine[]) => {
+const defaultSettings: AppSettings = {
+  notificationsEnabled: true,
+  soundDefault: "on",
+};
+
+const setupInvoke = (
+  timerState: TimerState,
+  routines: Routine[],
+  settings: AppSettings = defaultSettings,
+) => {
   invokeMock.mockImplementation((command: string) => {
     if (command === "get_timer_state") {
       return Promise.resolve(timerState);
     }
     if (command === "load_routines") {
       return Promise.resolve(routines);
+    }
+    if (command === "load_settings") {
+      return Promise.resolve(settings);
     }
     return Promise.resolve(undefined);
   });

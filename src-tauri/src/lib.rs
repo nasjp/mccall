@@ -67,6 +67,8 @@ pub fn run() {
             commands::get_timer_state,
             commands::save_routine,
             commands::load_routines,
+            commands::load_settings,
+            commands::save_settings,
             commands::respond_to_check_in,
             commands::toggle_global_mute,
             commands::get_session_stats,

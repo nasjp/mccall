@@ -58,15 +58,22 @@ describe("appReducer", () => {
       },
     });
 
+    const settings = {
+      notificationsEnabled: false,
+      soundDefault: "off" as const,
+    };
+
     const nextState = appReducer(initialAppState, {
       type: "initialize",
       timerState,
       routines,
+      settings,
     });
 
     expect(nextState.timerState).toEqual(timerState);
     expect(nextState.routines).toHaveLength(2);
     expect(nextState.currentRoutine?.id).toBe("routine-2");
+    expect(nextState.settings).toEqual(settings);
   });
 
   test("step-changed updates step index and clears check-in", () => {

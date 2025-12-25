@@ -115,6 +115,22 @@ pub struct TimerState {
     pub awaiting_check_in: Option<CheckInConfig>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSettings {
+    pub notifications_enabled: bool,
+    pub sound_default: SoundSetting,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            notifications_enabled: true,
+            sound_default: SoundSetting::On,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum RepeatMode {
@@ -129,7 +145,7 @@ pub enum RepeatMode {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SoundSetting {
     On,

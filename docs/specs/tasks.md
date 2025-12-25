@@ -19,7 +19,7 @@
     - 不足: Check-in結果/サウンド再生/ミュート使用の保存が通常フローで未実装
     - _要件: 5.1, 5.4_
 
-  - [ ] 2.3 設定データの永続化機能を実装（未着手）
+  - [x] 2.3 設定データの永続化機能を実装（Done）
     - settings.json の読み書き（notificationsEnabled, soundDefault など）
     - フロントのAppSettingsと同期
     - _要件: 追加（設定永続化）_

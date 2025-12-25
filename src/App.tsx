@@ -15,7 +15,13 @@ import { StepNotificationToast } from "./components/StepNotificationToast";
 import { TimerView } from "./components/TimerView";
 import { useTimerShortcuts } from "./hooks/useTimerShortcuts";
 import { AppStateProvider, useAppState } from "./state/appState";
-import type { CheckInChoice, Routine, Step, TimerState } from "./types/mccall";
+import type {
+  AppSettings,
+  CheckInChoice,
+  Routine,
+  Step,
+  TimerState,
+} from "./types/mccall";
 
 type NotificationFallback = {
   id: string;
@@ -89,11 +95,12 @@ const AppContent = () => {
 
   const reloadAppState = useCallback(async () => {
     try {
-      const [timerState, routines] = await Promise.all([
+      const [timerState, routines, settings] = await Promise.all([
         invoke<TimerState>("get_timer_state"),
         invoke<Routine[]>("load_routines"),
+        invoke<AppSettings>("load_settings"),
       ]);
-      dispatch({ type: "initialize", timerState, routines });
+      dispatch({ type: "initialize", timerState, routines, settings });
     } catch (error) {
       console.error("Failed to reload app state", error);
     }
