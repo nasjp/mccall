@@ -17,7 +17,7 @@
     "rust:clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
     "ci": "bun run lint && bun run typecheck && bun run test && bun run rust:fmt && bun run rust:clippy && bun run rust:test",
     "e2e": "playwright test",
-    "e2e:snapshots": "node scripts/tauri-snapshots.mjs",
+    "e2e:snapshots": "bun scripts/tauri-snapshots.ts",
     "e2e:ui": "playwright test --ui",
     "e2e:headed": "playwright test --headed",
     "e2e:debug": "PWDEBUG=1 playwright test --headed",

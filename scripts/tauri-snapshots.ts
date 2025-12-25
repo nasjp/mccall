@@ -1,10 +1,54 @@
-import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { remote } from "webdriverio";
+
+const textDecoder = new TextDecoder();
+
+const decodeOutput = (value) => {
+  if (!value) {
+    return "";
+  }
+  return textDecoder.decode(value).trim();
+};
+
+const runCommandSync = (cmd, options = {}) => {
+  const result = Bun.spawnSync({
+    cmd,
+    stdout: "pipe",
+    stderr: "pipe",
+    ...options,
+  });
+  const success = "success" in result ? result.success : result.exitCode === 0;
+  return {
+    success,
+    stdout: decodeOutput(result.stdout),
+    stderr: decodeOutput(result.stderr),
+  };
+};
+
+const runCommandInherit = async (cmd, options = {}) => {
+  const process = Bun.spawn({
+    cmd,
+    stdout: "inherit",
+    stderr: "inherit",
+    ...options,
+  });
+  const exitCode = await process.exited;
+  if (exitCode !== 0) {
+    throw new Error(`${cmd[0]} exited with code ${exitCode}`);
+  }
+};
+
+const spawnInherit = (cmd, options = {}) =>
+  Bun.spawn({
+    cmd,
+    stdout: "inherit",
+    stderr: "inherit",
+    ...options,
+  });
 
 const resolveAppBinary = (root) => {
   const binaryName = process.platform === "win32" ? "mccall.exe" : "mccall";
@@ -155,17 +199,10 @@ const ensureBuild = async () => {
   if (process.env.MCCALL_SKIP_TAURI_BUILD) {
     return;
   }
-  const result = spawnSync(
-    "bun",
-    ["run", "tauri", "build", "--debug", "--no-bundle"],
-    {
-      cwd: rootDir,
-      stdio: "inherit",
-    },
+  await runCommandInherit(
+    ["bun", "run", "tauri", "build", "--debug", "--no-bundle"],
+    { cwd: rootDir },
   );
-  if (result.status !== 0) {
-    throw new Error("tauri build failed");
-  }
 };
 
 const runWebDriverSnapshots = async () => {
@@ -175,10 +212,10 @@ const runWebDriverSnapshots = async () => {
     ...(remoteWebDriverUrl ? { REMOTE_WEBDRIVER_URL: remoteWebDriverUrl } : {}),
   };
 
-  const driverProcess = spawn(driverBin, ["--port", String(driverPort)], {
-    stdio: "inherit",
-    env: driverEnv,
-  });
+  const driverProcess = spawnInherit(
+    [driverBin, "--port", String(driverPort)],
+    { env: driverEnv },
+  );
 
   try {
     await waitForPort(driverPort, 15_000);
@@ -235,8 +272,7 @@ const runWebDriverSnapshots = async () => {
 
 const runMacSnapshots = async () => {
   ensureUiScriptingEnabled();
-  const appProcess = spawn(appBinary, [], {
-    stdio: "inherit",
+  const appProcess = spawnInherit([appBinary], {
     env: {
       ...process.env,
       MCCALL_DATA_DIR: dataDir,
@@ -392,14 +428,14 @@ const runAppleScript = (lines, { allowFailure = false } = {}) => {
   for (const line of lines) {
     args.push("-e", line);
   }
-  const result = spawnSync("osascript", args, { encoding: "utf-8" });
-  if (result.status !== 0) {
+  const result = runCommandSync(["osascript", ...args]);
+  if (!result.success) {
     if (allowFailure) {
       return "";
     }
-    throw new Error(result.stderr?.trim() || "osascript failed");
+    throw new Error(result.stderr || "osascript failed");
   }
-  return result.stdout.trim();
+  return result.stdout;
 };
 
 const getWindowBounds = (processName) => {
@@ -528,10 +564,14 @@ const captureWindow = async (processName, filePath) => {
     Math.round(bounds.width),
     Math.round(bounds.height),
   ].join(",");
-  const result = spawnSync("screencapture", ["-x", "-R", region, filePath], {
-    stdio: "inherit",
-  });
-  if (result.status !== 0) {
+  const result = runCommandSync([
+    "screencapture",
+    "-x",
+    "-R",
+    region,
+    filePath,
+  ]);
+  if (!result.success) {
     throw new Error("screencapture failed");
   }
 };

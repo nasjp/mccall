@@ -209,3 +209,6 @@
 
 - [x] 18.2 macOS向けローカルスナップショット実行の補強（Done）
   - AppleScript + screencapture で外部APIなしの実行フローを追加
+
+- [x] 18.3 スナップショットスクリプトのBun移行（Done）
+  - Bun APIを使った実行フローに整理
