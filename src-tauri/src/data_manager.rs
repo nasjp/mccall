@@ -463,4 +463,40 @@ mod tests {
 
         let _ = fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn load_routines_returns_error_on_invalid_json() {
+        let dir = temp_dir();
+        let manager = DataManager::new(&dir).expect("create manager");
+
+        fs::write(manager.routines_path(), "{invalid json").expect("write routines");
+        let err = manager.load_routines().expect_err("should fail");
+        assert!(matches!(err, DataError::Serde(_)));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_sessions_returns_empty_for_empty_file() {
+        let dir = temp_dir();
+        let manager = DataManager::new(&dir).expect("create manager");
+
+        fs::write(manager.sessions_path(), "").expect("write sessions");
+        let sessions = manager.load_sessions().expect("load sessions");
+        assert!(sessions.is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_sessions_returns_error_on_invalid_json() {
+        let dir = temp_dir();
+        let manager = DataManager::new(&dir).expect("create manager");
+
+        fs::write(manager.sessions_path(), "[not json]").expect("write sessions");
+        let err = manager.load_sessions().expect_err("should fail");
+        assert!(matches!(err, DataError::Serde(_)));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

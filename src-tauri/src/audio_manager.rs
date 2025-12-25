@@ -205,8 +205,9 @@ impl AudioManager {
 
 #[cfg(test)]
 mod tests {
-    use super::{AudioManager, PlaybackMode, SoundEvent, SoundPlaybackReason};
+    use super::{AudioManager, PlaybackMode, SoundEvent, SoundPlaybackReason, SoundPlaybackRecord};
     use crate::models::{SoundOverride, SoundScheme, SoundSetting};
+    use std::time::SystemTime;
 
     #[test]
     fn global_mute_blocks_playback() {
@@ -261,5 +262,53 @@ mod tests {
         assert!(!record.played);
         assert_eq!(record.reason, SoundPlaybackReason::PlaybackDisabled);
         assert_eq!(manager.logs().len(), 1);
+    }
+
+    #[test]
+    fn setting_disabled_is_logged() {
+        let mut manager = AudioManager::with_playback_mode(PlaybackMode::Disabled);
+
+        let record = manager.play_for_event(
+            Some("routine-1"),
+            Some("step-1"),
+            SoundSetting::Off,
+            SoundOverride::Inherit,
+            SoundScheme::Default,
+            SoundEvent::StepTransition,
+        );
+
+        assert!(!record.played);
+        assert_eq!(record.reason, SoundPlaybackReason::SettingDisabled);
+        assert_eq!(manager.logs().len(), 1);
+    }
+
+    #[test]
+    fn notify_failure_only_once_until_played() {
+        let mut manager = AudioManager::with_playback_mode(PlaybackMode::Disabled);
+        let failed_record = SoundPlaybackRecord {
+            routine_id: Some("routine-1".to_string()),
+            step_id: Some("step-1".to_string()),
+            event: SoundEvent::StepTransition,
+            played: false,
+            reason: SoundPlaybackReason::PlaybackFailed,
+            sound_path: None,
+            timestamp: SystemTime::now(),
+        };
+
+        assert!(manager.should_notify_failure(&failed_record));
+        assert!(!manager.should_notify_failure(&failed_record));
+
+        let played_record = SoundPlaybackRecord {
+            routine_id: Some("routine-1".to_string()),
+            step_id: Some("step-1".to_string()),
+            event: SoundEvent::StepTransition,
+            played: true,
+            reason: SoundPlaybackReason::Played,
+            sound_path: None,
+            timestamp: SystemTime::now(),
+        };
+
+        assert!(!manager.should_notify_failure(&played_record));
+        assert!(manager.should_notify_failure(&failed_record));
     }
 }

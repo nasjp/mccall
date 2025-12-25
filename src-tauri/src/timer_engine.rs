@@ -784,4 +784,97 @@ mod tests {
         ));
         assert!(engine.is_paused());
     }
+
+    #[test]
+    fn start_rejects_zero_duration_step() {
+        let routine = routine_with_steps(vec![sample_step("step-1", 0)], RepeatMode::Infinite);
+        let mut engine = TimerEngine::new();
+        let err = engine.start_routine(routine).expect_err("should fail");
+        assert!(matches!(err, TimerError::InvalidRoutine(_)));
+    }
+
+    #[test]
+    fn start_rejects_repeat_count_zero() {
+        let routine = routine_with_steps(
+            vec![sample_step("step-1", 60)],
+            RepeatMode::Count { value: 0 },
+        );
+        let mut engine = TimerEngine::new();
+        let err = engine.start_routine(routine).expect_err("should fail");
+        assert!(matches!(err, TimerError::InvalidRoutine(_)));
+    }
+
+    #[test]
+    fn start_rejects_repeat_duration_zero() {
+        let routine = routine_with_steps(
+            vec![sample_step("step-1", 60)],
+            RepeatMode::Duration { total_seconds: 0 },
+        );
+        let mut engine = TimerEngine::new();
+        let err = engine.start_routine(routine).expect_err("should fail");
+        assert!(matches!(err, TimerError::InvalidRoutine(_)));
+    }
+
+    #[test]
+    fn start_rejects_when_already_running() {
+        let routine = sample_routine(60);
+        let mut engine = TimerEngine::new();
+        engine
+            .start_routine(routine.clone())
+            .expect("start routine");
+        let err = engine.start_routine(routine).expect_err("should fail");
+        assert!(matches!(err, TimerError::AlreadyRunning));
+    }
+
+    #[test]
+    fn pause_errors_when_not_running() {
+        let mut engine = TimerEngine::new();
+        let err = engine.pause().expect_err("should fail");
+        assert!(matches!(err, TimerError::NotRunning));
+    }
+
+    #[test]
+    fn pause_errors_when_already_paused() {
+        let mut engine = TimerEngine::new();
+        engine
+            .start_routine(sample_routine(60))
+            .expect("start routine");
+        engine.pause().expect("pause");
+        let err = engine.pause().expect_err("should fail");
+        assert!(matches!(err, TimerError::AlreadyPaused));
+    }
+
+    #[test]
+    fn resume_errors_when_not_paused() {
+        let mut engine = TimerEngine::new();
+        engine
+            .start_routine(sample_routine(60))
+            .expect("start routine");
+        let err = engine.resume().expect_err("should fail");
+        assert!(matches!(err, TimerError::NotPaused));
+    }
+
+    #[test]
+    fn respond_to_check_in_without_pending_returns_error() {
+        let mut engine = TimerEngine::new();
+        engine
+            .start_routine(sample_routine(60))
+            .expect("start routine");
+        let err = engine
+            .respond_to_check_in(CheckInChoice::Done)
+            .expect_err("should fail");
+        assert!(matches!(err, TimerError::InvalidRoutine(_)));
+    }
+
+    #[test]
+    fn advance_while_paused_no_change() {
+        let routine = routine_with_steps(vec![sample_step("step-1", 1)], RepeatMode::Infinite);
+        let mut engine = TimerEngine::new();
+        engine.start_routine(routine).expect("start routine");
+        engine.pause().expect("pause");
+
+        let result = engine.advance_if_needed().expect("advance");
+        assert!(matches!(result, AdvanceResult::NoChange));
+        assert!(engine.is_paused());
+    }
 }
