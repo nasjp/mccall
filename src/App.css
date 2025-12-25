@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light dark;
   font-family:
     -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
     system-ui, sans-serif;
@@ -12,38 +13,232 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --radius-card: 12px;
+  --radius-button: 10px;
+  --radius-pill: 999px;
+  --text-title: 20px;
+  --text-step: 16px;
+  --text-body: 14px;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
   background-color: Canvas;
+  color: CanvasText;
 }
 
 .app {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 24px;
-  text-align: center;
+  padding: var(--space-24);
   color: CanvasText;
   background-color: Canvas;
 }
 
 .app__content {
-  display: grid;
-  gap: 8px;
-  justify-items: center;
+  width: min(960px, 100%);
 }
 
-.app__title {
+.section-title {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--text-title);
   font-weight: 600;
 }
 
-.app__subtitle {
+.panel {
+  background-color: Canvas;
+  border: 1px solid ButtonBorder;
+  border-radius: var(--radius-card);
+  padding: var(--space-16);
+}
+
+.empty-text {
   margin: 0;
   font-size: 13px;
   color: GrayText;
+}
+
+.timer-view {
+  width: min(520px, 100%);
+  display: grid;
+  gap: var(--space-16);
+  justify-items: center;
+  text-align: center;
+  padding: var(--space-24);
+}
+
+.timer-view__badge {
+  font-size: var(--text-step);
+  font-weight: 600;
+  background-color: ButtonFace;
+  color: CanvasText;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+}
+
+.timer-view__time {
+  font-size: clamp(32px, 6vw, 44px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.timer-view__instruction {
+  margin: 0;
+  max-width: 420px;
+  font-size: var(--text-body);
+  color: GrayText;
+}
+
+.timer-view__controls {
+  display: flex;
+  gap: var(--space-12);
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.button {
+  border: 1px solid ButtonBorder;
+  border-radius: var(--radius-button);
+  padding: 8px 16px;
+  font-size: 13px;
+  background-color: ButtonFace;
+  color: ButtonText;
+  cursor: pointer;
+}
+
+.button--primary {
+  font-weight: 600;
+}
+
+.button--destructive {
+  font-weight: 500;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.button:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+.routine-editor {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
+  gap: var(--space-24);
+  width: 100%;
+}
+
+.routine-editor__panel {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.routine-editor__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.routine-editor__list {
+  display: grid;
+  gap: var(--space-8);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.routine-editor__item {
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-button);
+  background-color: ButtonFace;
+  border: 1px solid transparent;
+}
+
+.routine-editor__empty {
+  list-style: none;
+}
+
+.routine-editor__item--active {
+  border-color: ButtonBorder;
+  background-color: Canvas;
+  font-weight: 600;
+}
+
+.routine-editor__item-title {
+  font-size: 14px;
+}
+
+.routine-editor__item-meta {
+  font-size: 12px;
+  color: GrayText;
+}
+
+.routine-editor__detail {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.routine-editor__detail-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.routine-editor__meta {
+  display: grid;
+  gap: var(--space-4);
+  font-size: 13px;
+  color: GrayText;
+}
+
+.routine-editor__steps {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.routine-editor__step {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-button);
+  background-color: ButtonFace;
+}
+
+.routine-editor__step-label {
+  font-size: 14px;
+}
+
+.routine-editor__step-meta {
+  font-size: 12px;
+  color: GrayText;
+}
+
+.stats-view {
+  display: grid;
+  gap: var(--space-12);
+}
+
+@media (max-width: 720px) {
+  .app {
+    padding: var(--space-16);
+  }
+
+  .routine-editor {
+    grid-template-columns: 1fr;
+  }
 }
