@@ -5,11 +5,12 @@ use crate::events::emit_app_error;
 use crate::menu_bar;
 use crate::models::{CheckInResponse, Routine, SessionStats, TimerState};
 use crate::runtime_state::RuntimeState;
+use crate::session_recovery;
 use crate::session_stats::calculate_session_stats;
 use crate::timer_actions;
 use crate::timer_engine::TimerEngine;
 use std::sync::Mutex;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 pub async fn start_routine(
@@ -127,6 +128,11 @@ pub async fn toggle_global_mute(
     })?;
     let muted = manager.toggle_global_mute();
     drop(manager);
+    if muted {
+        if let Some(data_manager) = app.try_state::<DataManager>() {
+            let _ = session_recovery::mark_muted(&data_manager);
+        }
+    }
     menu_bar::sync_menu_bar(&app);
     Ok(muted)
 }

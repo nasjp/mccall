@@ -2,6 +2,7 @@ use crate::models::{
     CheckInConfig, CheckInMode, RepeatMode, Routine, Session, SoundOverride, SoundScheme,
     SoundSetting, Step,
 };
+use crate::recovery_state::ActiveSessionSnapshot;
 use chrono::DateTime;
 use serde::Serialize;
 use std::fs;
@@ -53,6 +54,7 @@ pub struct DataManager {
     routines_path: PathBuf,
     sessions_path: PathBuf,
     settings_path: PathBuf,
+    active_session_path: PathBuf,
 }
 
 impl DataManager {
@@ -62,12 +64,14 @@ impl DataManager {
         let routines_path = base_dir.join("routines.json");
         let sessions_path = base_dir.join("sessions.json");
         let settings_path = base_dir.join("settings.json");
+        let active_session_path = base_dir.join("active_session.json");
 
         let manager = Self {
             base_dir,
             routines_path,
             sessions_path,
             settings_path,
+            active_session_path,
         };
 
         if !manager.routines_path.exists() {
@@ -100,6 +104,10 @@ impl DataManager {
 
     pub fn settings_path(&self) -> &Path {
         &self.settings_path
+    }
+
+    pub fn active_session_path(&self) -> &Path {
+        &self.active_session_path
     }
 
     pub fn load_routines(&self) -> DataResult<Vec<Routine>> {
@@ -138,6 +146,29 @@ impl DataManager {
         }
         let sessions = serde_json::from_str(&contents)?;
         Ok(sessions)
+    }
+
+    pub fn load_active_session(&self) -> DataResult<Option<ActiveSessionSnapshot>> {
+        if !self.active_session_path.exists() {
+            return Ok(None);
+        }
+        let contents = fs::read_to_string(&self.active_session_path)?;
+        if contents.trim().is_empty() {
+            return Ok(None);
+        }
+        let snapshot = serde_json::from_str(&contents)?;
+        Ok(Some(snapshot))
+    }
+
+    pub fn save_active_session(&self, snapshot: &ActiveSessionSnapshot) -> DataResult<()> {
+        self.write_json(&self.active_session_path, snapshot)
+    }
+
+    pub fn clear_active_session(&self) -> DataResult<()> {
+        if self.active_session_path.exists() {
+            fs::remove_file(&self.active_session_path)?;
+        }
+        Ok(())
     }
 
     pub fn save_session(&self, session: Session) -> DataResult<()> {

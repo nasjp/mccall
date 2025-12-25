@@ -106,7 +106,8 @@ fn handle_start(app: &AppHandle) {
         .or_else(|| routines.first().cloned());
 
     if let Some(routine) = routine {
-        if let Err(err) = timer_actions::start_routine(routine, &timer_engine, &runtime_state, app)
+        if let Err(err) =
+            timer_actions::start_routine(routine, &data_manager, &timer_engine, &runtime_state, app)
         {
             report_error(app, err);
         }

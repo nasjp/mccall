@@ -1,15 +1,16 @@
 use crate::app_error::{AppError, AppErrorKind};
-use crate::audio_manager::SoundEvent;
+use crate::audio_manager::{AudioManager, SoundEvent};
 use crate::data_manager::DataManager;
 use crate::events::{
     emit_step_changed, emit_timer_paused, emit_timer_resumed, emit_timer_stopped, emit_timer_tick,
 };
 use crate::models::{CheckInChoice, Routine, Step};
 use crate::runtime_state::RuntimeState;
+use crate::session_recovery;
 use crate::sound_actions::{build_sound_context, play_sound_for_event};
 use crate::timer_engine::{AdvanceResult, TimerEngine};
 use std::sync::Mutex;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 fn timer_lock_error() -> AppError {
     AppError::system("タイマー状態の取得に失敗しました")
@@ -38,9 +39,9 @@ fn capture_advance_events(
     (step_changed, routine_completed)
 }
 
-fn remember_routine(runtime_state: &Mutex<RuntimeState>, routine_id: String) {
+fn remember_routine(runtime_state: &Mutex<RuntimeState>, routine_id: &str) {
     match runtime_state.lock() {
-        Ok(mut state) => state.set_last_routine_id(routine_id),
+        Ok(mut state) => state.set_last_routine_id(routine_id.to_string()),
         Err(_) => eprintln!("Runtime state lock failed"),
     }
 }
@@ -57,11 +58,12 @@ pub fn start_routine_by_id(
         .into_iter()
         .find(|item| item.id == routine_id)
         .ok_or_else(|| routine_not_found(routine_id))?;
-    start_routine(routine, timer_engine, runtime_state, app)
+    start_routine(routine, data_manager, timer_engine, runtime_state, app)
 }
 
 pub fn start_routine(
     routine: Routine,
+    data_manager: &DataManager,
     timer_engine: &Mutex<TimerEngine>,
     runtime_state: &Mutex<RuntimeState>,
     app: &AppHandle,
@@ -69,7 +71,8 @@ pub fn start_routine(
     let routine_id = routine.id.clone();
     let mut engine = timer_engine.lock().map_err(|_| timer_lock_error())?;
     engine.start_routine(routine).map_err(AppError::from)?;
-    let step_changed = engine.current_step().cloned().map(|step| {
+    let current_step = engine.current_step().cloned();
+    let step_changed = current_step.clone().map(|step| {
         let step_index = engine.current_step_index().unwrap_or(0);
         (step, step_index)
     });
@@ -82,7 +85,15 @@ pub fn start_routine(
         })
     });
     drop(engine);
-    remember_routine(runtime_state, routine_id);
+    remember_routine(runtime_state, &routine_id);
+    if let Some(step) = current_step {
+        let muted = app
+            .try_state::<Mutex<AudioManager>>()
+            .and_then(|state| state.lock().ok().map(|manager| manager.is_muted()))
+            .unwrap_or(false);
+        session_recovery::start_active_session(data_manager, &routine_id, &step, muted)
+            .map_err(AppError::from)?;
+    }
     if let Some((step, step_index)) = step_changed {
         emit_step_changed(app, step, step_index);
     }
@@ -97,6 +108,9 @@ pub fn pause_timer(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result
     engine.pause().map_err(AppError::from)?;
     drop(engine);
     emit_timer_paused(app);
+    if let Some(manager) = app.try_state::<DataManager>() {
+        session_recovery::mark_paused(&manager).map_err(AppError::from)?;
+    }
     Ok(())
 }
 
@@ -105,6 +119,9 @@ pub fn resume_timer(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Resul
     engine.resume().map_err(AppError::from)?;
     drop(engine);
     emit_timer_resumed(app);
+    if let Some(manager) = app.try_state::<DataManager>() {
+        session_recovery::mark_resumed(&manager).map_err(AppError::from)?;
+    }
     Ok(())
 }
 
@@ -123,12 +140,18 @@ pub fn skip_step(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(
     };
     drop(engine);
     if let Some((step, step_index)) = step_changed {
+        if let Some(manager) = app.try_state::<DataManager>() {
+            session_recovery::update_active_step(&manager, &step).map_err(AppError::from)?;
+        }
         emit_step_changed(app, step, step_index);
         play_sound_for_event(app, step_sound_context, SoundEvent::StepTransition);
     }
     if routine_completed {
         emit_timer_stopped(app);
         play_sound_for_event(app, routine_sound_context, SoundEvent::RoutineCompleted);
+        if let Some(manager) = app.try_state::<DataManager>() {
+            session_recovery::clear_active_session(&manager).map_err(AppError::from)?;
+        }
     }
     Ok(())
 }
@@ -138,6 +161,9 @@ pub fn stop_timer(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<
     engine.stop().map_err(AppError::from)?;
     drop(engine);
     emit_timer_stopped(app);
+    if let Some(manager) = app.try_state::<DataManager>() {
+        session_recovery::clear_active_session(&manager).map_err(AppError::from)?;
+    }
     Ok(())
 }
 
@@ -160,12 +186,18 @@ pub fn respond_to_check_in(
     };
     drop(engine);
     if let Some((step, step_index)) = step_changed {
+        if let Some(manager) = app.try_state::<DataManager>() {
+            session_recovery::update_active_step(&manager, &step).map_err(AppError::from)?;
+        }
         emit_step_changed(app, step, step_index);
         play_sound_for_event(app, step_sound_context, SoundEvent::StepTransition);
     }
     if routine_completed {
         emit_timer_stopped(app);
         play_sound_for_event(app, routine_sound_context, SoundEvent::RoutineCompleted);
+        if let Some(manager) = app.try_state::<DataManager>() {
+            session_recovery::clear_active_session(&manager).map_err(AppError::from)?;
+        }
     }
     Ok(())
 }

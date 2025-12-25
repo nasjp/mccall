@@ -9,7 +9,9 @@ mod data_manager;
 mod global_shortcuts;
 mod menu_bar;
 mod models;
+mod recovery_state;
 mod runtime_state;
+mod session_recovery;
 mod session_stats;
 mod sound_actions;
 mod timer_actions;
@@ -33,6 +35,9 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             let data_manager = data_manager::DataManager::new(data_dir)?;
+            if let Err(err) = session_recovery::recover_aborted_session(&data_manager) {
+                eprintln!("Failed to recover session: {err}");
+            }
             app.manage(data_manager);
             app.manage(Mutex::new(timer_engine::TimerEngine::new()));
             app.manage(Mutex::new(audio_manager::AudioManager::new()));
@@ -136,6 +141,14 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
         };
         drop(engine);
 
+        if let Some(data_manager) = app_handle.try_state::<data_manager::DataManager>() {
+            if let Some((step, _)) = step_changed.as_ref() {
+                let _ = session_recovery::update_active_step(&data_manager, step);
+            }
+            if routine_completed {
+                let _ = session_recovery::clear_active_session(&data_manager);
+            }
+        }
         if let Some((remaining_seconds, step_name)) = tick_payload {
             emit_timer_tick(&app_handle, remaining_seconds, step_name);
         }
