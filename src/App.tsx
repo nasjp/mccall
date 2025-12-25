@@ -1,15 +1,26 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import "./App.css";
+import { CheckInDialog } from "./components/CheckInDialog";
+import { CheckInPrompt } from "./components/CheckInPrompt";
 import { RoutineEditor } from "./components/RoutineEditor";
 import { TimerView } from "./components/TimerView";
 import { useTimerShortcuts } from "./hooks/useTimerShortcuts";
 import { AppStateProvider, useAppState } from "./state/appState";
+import type { CheckInChoice } from "./types/mccall";
 
 const AppContent = () => {
-  const { state } = useAppState();
+  const { state, dispatch } = useAppState();
   const activeRoutine = state.currentRoutine ?? state.routines[0];
   const canStart = Boolean(activeRoutine && activeRoutine.steps.length > 0);
+  const checkInConfig = state.timerState.awaitingCheckIn;
+  const checkInStep = state.timerState.awaitingCheckInStep;
+  const checkInStartRef = useRef<number | null>(null);
+  const checkInKey = checkInConfig
+    ? `${checkInConfig.mode}:${checkInStep?.id ?? "unknown"}`
+    : null;
+  const checkInTitle = checkInConfig?.promptTitle?.trim() || "メモした？";
+  const checkInBody = checkInConfig?.promptBody?.trim();
 
   const startRoutine = useCallback(async () => {
     if (!activeRoutine || activeRoutine.steps.length === 0) {
@@ -53,6 +64,46 @@ const AppContent = () => {
       console.error("Failed to stop timer", error);
     }
   }, []);
+
+  useEffect(() => {
+    if (checkInKey) {
+      checkInStartRef.current = performance.now();
+      return;
+    }
+    checkInStartRef.current = null;
+  }, [checkInKey]);
+
+  const respondToCheckIn = useCallback(
+    async (choice: CheckInChoice) => {
+      if (!checkInConfig) {
+        return;
+      }
+      const startedAt = checkInStartRef.current ?? performance.now();
+      const responseTimeMs = Math.max(
+        0,
+        Math.round(performance.now() - startedAt),
+      );
+      const respondedAt = new Date().toISOString();
+
+      try {
+        await invoke("respond_to_check_in", {
+          response: {
+            stepId: checkInStep?.id ?? "",
+            choice,
+            respondedAt,
+            responseTimeMs,
+          },
+        });
+
+        if (checkInConfig.mode === "prompt") {
+          dispatch({ type: "check-in-cleared" });
+        }
+      } catch (error) {
+        console.error("Failed to respond to check-in", error);
+      }
+    },
+    [checkInConfig, checkInStep?.id, dispatch],
+  );
 
   useTimerShortcuts(
     {
@@ -100,6 +151,20 @@ const AppContent = () => {
   return (
     <main className="app">
       <div className="app__content">{content}</div>
+      <CheckInDialog
+        open={checkInConfig?.mode === "gate"}
+        title={checkInTitle}
+        body={checkInBody}
+        onDone={() => respondToCheckIn("done")}
+        onSkip={() => respondToCheckIn("skip")}
+      />
+      <CheckInPrompt
+        open={checkInConfig?.mode === "prompt"}
+        title={checkInTitle}
+        body={checkInBody}
+        onDone={() => respondToCheckIn("done")}
+        onSkip={() => respondToCheckIn("skip")}
+      />
     </main>
   );
 };

@@ -102,6 +102,7 @@ export interface TimerState {
   currentStepIndex: number;
   remainingSeconds: number;
   awaitingCheckIn?: CheckInConfig;
+  awaitingCheckInStep?: Step;
 }
 
 export interface AppState {

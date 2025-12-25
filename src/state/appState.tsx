@@ -23,6 +23,8 @@ const defaultTimerState: TimerState = {
   isPaused: false,
   currentStepIndex: 0,
   remainingSeconds: 0,
+  awaitingCheckIn: undefined,
+  awaitingCheckInStep: undefined,
 };
 
 const defaultSettings: AppSettings = {
@@ -64,8 +66,9 @@ type AppAction =
   | { type: "set-current-routine"; routineId: string | null }
   | { type: "timer-tick"; remainingSeconds: number }
   | { type: "step-changed"; step: Step; stepIndex: number }
-  | { type: "check-in-required"; checkIn: CheckInConfig }
+  | { type: "check-in-required"; checkIn: CheckInConfig; step: Step }
   | { type: "check-in-timeout"; stepId: string }
+  | { type: "check-in-cleared" }
   | { type: "timer-paused" }
   | { type: "timer-resumed" }
   | { type: "timer-stopped" };
@@ -127,6 +130,7 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
           isPaused: false,
           currentStepIndex: action.stepIndex,
           awaitingCheckIn: undefined,
+          awaitingCheckInStep: undefined,
         },
       };
     }
@@ -137,6 +141,7 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
           ...state.timerState,
           isRunning: true,
           awaitingCheckIn: action.checkIn,
+          awaitingCheckInStep: action.step,
           isPaused:
             action.checkIn.mode === "gate" ? true : state.timerState.isPaused,
         },
@@ -147,6 +152,16 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
         timerState: {
           ...state.timerState,
           awaitingCheckIn: undefined,
+          awaitingCheckInStep: undefined,
+        },
+      };
+    case "check-in-cleared":
+      return {
+        ...state,
+        timerState: {
+          ...state.timerState,
+          awaitingCheckIn: undefined,
+          awaitingCheckInStep: undefined,
         },
       };
     case "timer-paused":
@@ -230,6 +245,7 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
             dispatch({
               type: "check-in-required",
               checkIn: event.payload.checkIn,
+              step: event.payload.step,
             });
           }),
           listen<CheckInTimeoutPayload>("check-in-timeout", (event) => {

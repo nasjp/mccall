@@ -96,12 +96,15 @@ describe("appReducer", () => {
 
   test("check-in-required in gate mode pauses timer", () => {
     const checkIn: CheckInConfig = { mode: "gate" };
+    const routine = buildRoutine();
     const nextState = appReducer(initialAppState, {
       type: "check-in-required",
       checkIn,
+      step: routine.steps[0],
     });
 
     expect(nextState.timerState.awaitingCheckIn).toEqual(checkIn);
+    expect(nextState.timerState.awaitingCheckInStep?.id).toBe("step-1");
     expect(nextState.timerState.isPaused).toBe(true);
     expect(nextState.timerState.isRunning).toBe(true);
   });
@@ -149,6 +152,7 @@ describe("appReducer", () => {
       timerState: {
         ...initialAppState.timerState,
         awaitingCheckIn: promptCheckIn,
+        awaitingCheckInStep: buildRoutine().steps[0],
       },
     };
 
@@ -158,5 +162,23 @@ describe("appReducer", () => {
     });
 
     expect(nextState.timerState.awaitingCheckIn).toBeUndefined();
+    expect(nextState.timerState.awaitingCheckInStep).toBeUndefined();
+  });
+
+  test("check-in-cleared clears awaiting check-in", () => {
+    const promptCheckIn: CheckInConfig = { mode: "prompt" };
+    const state = {
+      ...initialAppState,
+      timerState: {
+        ...initialAppState.timerState,
+        awaitingCheckIn: promptCheckIn,
+        awaitingCheckInStep: buildRoutine().steps[0],
+      },
+    };
+
+    const nextState = appReducer(state, { type: "check-in-cleared" });
+
+    expect(nextState.timerState.awaitingCheckIn).toBeUndefined();
+    expect(nextState.timerState.awaitingCheckInStep).toBeUndefined();
   });
 });
