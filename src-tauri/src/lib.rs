@@ -5,6 +5,7 @@ use tauri::Manager;
 mod commands;
 #[allow(dead_code)]
 mod data_manager;
+mod global_shortcuts;
 mod menu_bar;
 mod models;
 mod runtime_state;
@@ -34,9 +35,11 @@ pub fn run() {
             let menu = menu_bar::create_menu_bar(app_handle)?;
             app.manage(Mutex::new(menu));
             menu_bar::sync_menu_bar(app_handle);
+            global_shortcuts::register_global_shortcuts(app_handle);
             spawn_timer_loop(app_handle.clone());
             Ok(())
         })
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
