@@ -5,7 +5,10 @@ use tauri::Manager;
 mod commands;
 #[allow(dead_code)]
 mod data_manager;
+mod menu_bar;
 mod models;
+mod runtime_state;
+mod timer_actions;
 #[allow(dead_code)]
 mod timer_engine;
 
@@ -25,7 +28,13 @@ pub fn run() {
             let data_manager = data_manager::DataManager::new(data_dir)?;
             app.manage(data_manager);
             app.manage(Mutex::new(timer_engine::TimerEngine::new()));
-            spawn_timer_loop(app.handle().clone());
+            app.manage(Mutex::new(audio_manager::AudioManager::new()));
+            app.manage(Mutex::new(runtime_state::RuntimeState::default()));
+            let app_handle = app.handle();
+            let menu = menu_bar::create_menu_bar(app_handle)?;
+            app.manage(Mutex::new(menu));
+            menu_bar::sync_menu_bar(app_handle);
+            spawn_timer_loop(app_handle.clone());
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -117,5 +126,6 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
         if routine_completed {
             emit_timer_stopped(&app_handle);
         }
+        menu_bar::sync_menu_bar(&app_handle);
     });
 }
