@@ -335,8 +335,37 @@ body {
   color: FieldText;
 }
 
+.routine-editor__textarea {
+  border: 1px solid ButtonBorder;
+  border-radius: var(--radius-button);
+  padding: 8px 10px;
+  font-size: 13px;
+  background-color: Field;
+  color: FieldText;
+  resize: vertical;
+}
+
 .routine-editor__input--short {
   width: 120px;
+}
+
+.routine-editor__toggle {
+  display: flex;
+  gap: var(--space-8);
+  align-items: center;
+  font-size: 13px;
+  color: GrayText;
+}
+
+.routine-editor__steps-grid {
+  display: grid;
+  gap: var(--space-16);
+  grid-template-columns: minmax(200px, 1fr) minmax(0, 1fr);
+}
+
+.routine-editor__steps-panel {
+  display: grid;
+  gap: var(--space-12);
 }
 
 .routine-editor__steps-header {
@@ -355,18 +384,10 @@ body {
 }
 
 .routine-editor__step {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-12);
-  padding: var(--space-8) var(--space-12);
-  border-radius: var(--radius-button);
-  background-color: ButtonFace;
-}
-
-.routine-editor__step-main {
   display: grid;
-  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-8);
 }
 
 .routine-editor__step-label {
@@ -378,10 +399,39 @@ body {
   color: GrayText;
 }
 
+.routine-editor__step-button {
+  width: 100%;
+  text-align: left;
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-button);
+  background-color: ButtonFace;
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: inherit;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.routine-editor__step-button--active {
+  border-color: ButtonBorder;
+  background-color: Canvas;
+  font-weight: 600;
+}
+
+.routine-editor__step-button:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
 .routine-editor__step-actions {
   display: flex;
   gap: var(--space-4);
   flex-wrap: wrap;
+}
+
+.routine-editor__step-detail {
+  display: grid;
+  gap: var(--space-12);
 }
 
 .button--compact {
@@ -400,6 +450,10 @@ body {
   }
 
   .routine-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .routine-editor__steps-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -1,4 +1,12 @@
-import type { RepeatMode, Routine, SoundSetting, Step } from "../types/mccall";
+import { useState } from "react";
+import type {
+  CheckInMode,
+  RepeatMode,
+  Routine,
+  SoundOverride,
+  SoundSetting,
+  Step,
+} from "../types/mccall";
 
 type RoutineEditorProps = {
   routines: Routine[];
@@ -63,6 +71,8 @@ const toPositiveInt = (value: string | number, fallback: number) => {
   return Math.max(1, Math.round(parsed));
 };
 
+const defaultPromptTimeoutSeconds = 15;
+
 export const RoutineEditor = ({
   routines,
   currentRoutine,
@@ -70,6 +80,9 @@ export const RoutineEditor = ({
   onUpsertRoutine,
 }: RoutineEditorProps) => {
   const activeRoutine = currentRoutine ?? routines[0];
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(
+    activeRoutine?.steps[0]?.id ?? null,
+  );
   const repeatType = activeRoutine?.repeatMode.type ?? "infinite";
   const repeatCount =
     activeRoutine?.repeatMode.type === "count"
@@ -94,6 +107,23 @@ export const RoutineEditor = ({
     });
   };
 
+  const resolvedSelectedStepId = (() => {
+    if (!activeRoutine || activeRoutine.steps.length === 0) {
+      return null;
+    }
+    if (
+      selectedStepId &&
+      activeRoutine.steps.some((step) => step.id === selectedStepId)
+    ) {
+      return selectedStepId;
+    }
+    return activeRoutine.steps[0].id;
+  })();
+
+  const selectedStep = activeRoutine?.steps.find(
+    (step) => step.id === resolvedSelectedStepId,
+  );
+
   const handleCreateRoutine = () => {
     const routine = createRoutine();
     commitRoutine(routine);
@@ -104,21 +134,31 @@ export const RoutineEditor = ({
     if (!activeRoutine) {
       return;
     }
-    const nextSteps = normalizeSteps([
-      ...activeRoutine.steps,
-      createStep(activeRoutine.steps.length),
-    ]);
+    const newStep = createStep(activeRoutine.steps.length);
+    const nextSteps = normalizeSteps([...activeRoutine.steps, newStep]);
     updateRoutine({ steps: nextSteps });
+    setSelectedStepId(newStep.id);
   };
 
   const handleRemoveStep = (stepId: string) => {
     if (!activeRoutine) {
       return;
     }
+    const removedIndex = activeRoutine.steps.findIndex(
+      (step) => step.id === stepId,
+    );
     const nextSteps = normalizeSteps(
       activeRoutine.steps.filter((step) => step.id !== stepId),
     );
     updateRoutine({ steps: nextSteps });
+    if (resolvedSelectedStepId === stepId) {
+      const nextSelected =
+        nextSteps[removedIndex]?.id ??
+        nextSteps[removedIndex - 1]?.id ??
+        nextSteps[0]?.id ??
+        null;
+      setSelectedStepId(nextSelected);
+    }
   };
 
   const handleMoveStep = (fromIndex: number, toIndex: number) => {
@@ -132,6 +172,81 @@ export const RoutineEditor = ({
     const [moved] = nextSteps.splice(fromIndex, 1);
     nextSteps.splice(toIndex, 0, moved);
     updateRoutine({ steps: normalizeSteps(nextSteps) });
+  };
+
+  const updateStep = (stepId: string, updates: Partial<Step>) => {
+    if (!activeRoutine) {
+      return;
+    }
+    const nextSteps = activeRoutine.steps.map((step) =>
+      step.id === stepId ? { ...step, ...updates } : step,
+    );
+    updateRoutine({ steps: nextSteps });
+  };
+
+  const updateCheckInMode = (mode: CheckInMode) => {
+    if (!selectedStep) {
+      return;
+    }
+    if (mode === "off") {
+      updateStep(selectedStep.id, { checkIn: { mode: "off" } });
+      return;
+    }
+    if (mode === "prompt") {
+      updateStep(selectedStep.id, {
+        checkIn: {
+          ...selectedStep.checkIn,
+          mode,
+          promptTimeoutSeconds:
+            selectedStep.checkIn.promptTimeoutSeconds ??
+            defaultPromptTimeoutSeconds,
+        },
+      });
+      return;
+    }
+    updateStep(selectedStep.id, {
+      checkIn: {
+        ...selectedStep.checkIn,
+        mode,
+        promptTimeoutSeconds: undefined,
+      },
+    });
+  };
+
+  const updateCheckInField = (updates: Partial<Step["checkIn"]>) => {
+    if (!selectedStep) {
+      return;
+    }
+    updateStep(selectedStep.id, {
+      checkIn: {
+        ...selectedStep.checkIn,
+        ...updates,
+      },
+    });
+  };
+
+  const updateCheckInText = (
+    field: "promptTitle" | "promptBody",
+    value: string,
+  ) => {
+    if (!selectedStep) {
+      return;
+    }
+    const nextValue = value.trim().length === 0 ? undefined : value;
+    updateCheckInField(
+      field === "promptTitle"
+        ? { promptTitle: nextValue }
+        : { promptBody: nextValue },
+    );
+  };
+
+  const updateSoundOverride = (value: string) => {
+    if (!selectedStep) {
+      return;
+    }
+    updateStep(selectedStep.id, {
+      soundOverride: value as SoundOverride,
+    });
   };
 
   return (
@@ -294,61 +409,274 @@ export const RoutineEditor = ({
                 <option value="off">off</option>
               </select>
             </div>
-            <div className="routine-editor__steps-header">
-              <div className="routine-editor__detail-title">Steps</div>
-              <button
-                className="button button--compact"
-                type="button"
-                onClick={handleAddStep}
-              >
-                ステップを追加
-              </button>
+            <div className="routine-editor__steps-grid">
+              <div className="routine-editor__steps-panel">
+                <div className="routine-editor__steps-header">
+                  <div className="routine-editor__detail-title">Steps</div>
+                  <button
+                    className="button button--compact"
+                    type="button"
+                    onClick={handleAddStep}
+                  >
+                    ステップを追加
+                  </button>
+                </div>
+                <ul className="routine-editor__steps">
+                  {activeRoutine.steps.length === 0 ? (
+                    <li className="routine-editor__empty">
+                      <p className="empty-text">ステップがありません</p>
+                    </li>
+                  ) : (
+                    activeRoutine.steps.map((step, index) => (
+                      <li key={step.id} className="routine-editor__step">
+                        <button
+                          type="button"
+                          className={
+                            step.id === resolvedSelectedStepId
+                              ? "routine-editor__step-button routine-editor__step-button--active"
+                              : "routine-editor__step-button"
+                          }
+                          aria-pressed={step.id === resolvedSelectedStepId}
+                          onClick={() => setSelectedStepId(step.id)}
+                        >
+                          <div className="routine-editor__step-label">
+                            {step.label}
+                          </div>
+                          <div className="routine-editor__step-meta">
+                            {Math.max(1, Math.round(step.durationSeconds / 60))}
+                            分
+                          </div>
+                        </button>
+                        <div className="routine-editor__step-actions">
+                          <button
+                            className="button button--compact"
+                            type="button"
+                            onClick={() => handleMoveStep(index, index - 1)}
+                            disabled={index === 0}
+                          >
+                            上へ
+                          </button>
+                          <button
+                            className="button button--compact"
+                            type="button"
+                            onClick={() => handleMoveStep(index, index + 1)}
+                            disabled={index === activeRoutine.steps.length - 1}
+                          >
+                            下へ
+                          </button>
+                          <button
+                            className="button button--compact button--destructive"
+                            type="button"
+                            onClick={() => handleRemoveStep(step.id)}
+                          >
+                            削除
+                          </button>
+                        </div>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+              <div className="routine-editor__step-detail">
+                {selectedStep ? (
+                  <>
+                    <div className="routine-editor__detail-title">
+                      ステップ詳細
+                    </div>
+                    <div className="routine-editor__form">
+                      <label
+                        className="routine-editor__label"
+                        htmlFor="step-label"
+                      >
+                        ラベル
+                      </label>
+                      <input
+                        id="step-label"
+                        className="routine-editor__input"
+                        type="text"
+                        value={selectedStep.label}
+                        onChange={(event) =>
+                          updateStep(selectedStep.id, {
+                            label: event.currentTarget.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="routine-editor__form">
+                      <label
+                        className="routine-editor__label"
+                        htmlFor="step-duration"
+                      >
+                        時間（分）
+                      </label>
+                      <input
+                        id="step-duration"
+                        className="routine-editor__input routine-editor__input--short"
+                        type="number"
+                        min={1}
+                        value={Math.max(
+                          1,
+                          Math.round(selectedStep.durationSeconds / 60),
+                        )}
+                        onChange={(event) =>
+                          updateStep(selectedStep.id, {
+                            durationSeconds:
+                              toPositiveInt(event.currentTarget.value, 1) * 60,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="routine-editor__form">
+                      <label
+                        className="routine-editor__label"
+                        htmlFor="step-instruction"
+                      >
+                        指示文
+                      </label>
+                      <textarea
+                        id="step-instruction"
+                        className="routine-editor__textarea"
+                        rows={2}
+                        value={selectedStep.instruction ?? ""}
+                        onChange={(event) =>
+                          updateStep(selectedStep.id, {
+                            instruction: event.currentTarget.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="routine-editor__form">
+                      <label
+                        className="routine-editor__label"
+                        htmlFor="step-sound"
+                      >
+                        サウンド
+                      </label>
+                      <select
+                        id="step-sound"
+                        className="routine-editor__select"
+                        value={selectedStep.soundOverride}
+                        onChange={(event) =>
+                          updateSoundOverride(event.currentTarget.value)
+                        }
+                      >
+                        <option value="inherit">inherit</option>
+                        <option value="on">on</option>
+                        <option value="off">off</option>
+                      </select>
+                    </div>
+                    <label className="routine-editor__toggle">
+                      <input
+                        type="checkbox"
+                        checked={selectedStep.countAsBreak}
+                        onChange={(event) =>
+                          updateStep(selectedStep.id, {
+                            countAsBreak: event.currentTarget.checked,
+                          })
+                        }
+                      />
+                      休憩として集計
+                    </label>
+                    <div className="routine-editor__form">
+                      <label
+                        className="routine-editor__label"
+                        htmlFor="step-checkin"
+                      >
+                        Check-in
+                      </label>
+                      <select
+                        id="step-checkin"
+                        className="routine-editor__select"
+                        value={selectedStep.checkIn.mode}
+                        onChange={(event) =>
+                          updateCheckInMode(
+                            event.currentTarget.value as CheckInMode,
+                          )
+                        }
+                      >
+                        <option value="off">off</option>
+                        <option value="prompt">prompt</option>
+                        <option value="gate">gate</option>
+                      </select>
+                    </div>
+                    {selectedStep.checkIn.mode !== "off" ? (
+                      <>
+                        <div className="routine-editor__form">
+                          <label
+                            className="routine-editor__label"
+                            htmlFor="step-checkin-title"
+                          >
+                            確認タイトル
+                          </label>
+                          <input
+                            id="step-checkin-title"
+                            className="routine-editor__input"
+                            type="text"
+                            value={selectedStep.checkIn.promptTitle ?? ""}
+                            onChange={(event) =>
+                              updateCheckInText(
+                                "promptTitle",
+                                event.currentTarget.value,
+                              )
+                            }
+                          />
+                        </div>
+                        <div className="routine-editor__form">
+                          <label
+                            className="routine-editor__label"
+                            htmlFor="step-checkin-body"
+                          >
+                            確認本文
+                          </label>
+                          <textarea
+                            id="step-checkin-body"
+                            className="routine-editor__textarea"
+                            rows={2}
+                            value={selectedStep.checkIn.promptBody ?? ""}
+                            onChange={(event) =>
+                              updateCheckInText(
+                                "promptBody",
+                                event.currentTarget.value,
+                              )
+                            }
+                          />
+                        </div>
+                      </>
+                    ) : null}
+                    {selectedStep.checkIn.mode === "prompt" ? (
+                      <div className="routine-editor__form">
+                        <label
+                          className="routine-editor__label"
+                          htmlFor="step-checkin-timeout"
+                        >
+                          タイムアウト（秒）
+                        </label>
+                        <input
+                          id="step-checkin-timeout"
+                          className="routine-editor__input routine-editor__input--short"
+                          type="number"
+                          min={1}
+                          value={
+                            selectedStep.checkIn.promptTimeoutSeconds ??
+                            defaultPromptTimeoutSeconds
+                          }
+                          onChange={(event) =>
+                            updateCheckInField({
+                              promptTimeoutSeconds: toPositiveInt(
+                                event.currentTarget.value,
+                                defaultPromptTimeoutSeconds,
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="empty-text">ステップを選択してください</p>
+                )}
+              </div>
             </div>
-            <ul className="routine-editor__steps">
-              {activeRoutine.steps.length === 0 ? (
-                <li className="routine-editor__empty">
-                  <p className="empty-text">ステップがありません</p>
-                </li>
-              ) : (
-                activeRoutine.steps.map((step, index) => (
-                  <li key={step.id} className="routine-editor__step">
-                    <div className="routine-editor__step-main">
-                      <div className="routine-editor__step-label">
-                        {step.label}
-                      </div>
-                      <div className="routine-editor__step-meta">
-                        {Math.max(1, Math.round(step.durationSeconds / 60))}分
-                      </div>
-                    </div>
-                    <div className="routine-editor__step-actions">
-                      <button
-                        className="button button--compact"
-                        type="button"
-                        onClick={() => handleMoveStep(index, index - 1)}
-                        disabled={index === 0}
-                      >
-                        上へ
-                      </button>
-                      <button
-                        className="button button--compact"
-                        type="button"
-                        onClick={() => handleMoveStep(index, index + 1)}
-                        disabled={index === activeRoutine.steps.length - 1}
-                      >
-                        下へ
-                      </button>
-                      <button
-                        className="button button--compact button--destructive"
-                        type="button"
-                        onClick={() => handleRemoveStep(step.id)}
-                      >
-                        削除
-                      </button>
-                    </div>
-                  </li>
-                ))
-              )}
-            </ul>
           </div>
         ) : (
           <p className="empty-text">ルーチンを選択してください</p>
