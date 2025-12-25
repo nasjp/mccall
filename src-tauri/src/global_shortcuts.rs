@@ -4,6 +4,8 @@ use crate::data_manager::DataManager;
 use crate::events::emit_app_error;
 use crate::menu_bar;
 use crate::runtime_state::RuntimeState;
+use crate::session_recovery;
+use crate::session_tracker::SessionTracker;
 use crate::timer_actions;
 use crate::timer_engine::TimerEngine;
 use std::sync::Mutex;
@@ -163,7 +165,17 @@ fn handle_toggle_mute(app: &AppHandle) {
     let audio_state = app.state::<Mutex<AudioManager>>();
     match audio_state.lock() {
         Ok(mut manager) => {
-            manager.toggle_global_mute();
+            let muted = manager.toggle_global_mute();
+            if muted {
+                if let Some(data_manager) = app.try_state::<DataManager>() {
+                    let _ = session_recovery::mark_muted(&data_manager);
+                }
+                if let Some(tracker_state) = app.try_state::<Mutex<SessionTracker>>() {
+                    if let Ok(mut tracker) = tracker_state.lock() {
+                        tracker.mark_muted();
+                    }
+                }
+            }
         }
         Err(_) => {
             report_error(

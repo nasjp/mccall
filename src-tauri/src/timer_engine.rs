@@ -256,6 +256,12 @@ impl TimerEngine {
         self.last_check_in.as_ref()
     }
 
+    pub fn pending_check_in(&self) -> Option<(CheckInMode, usize)> {
+        self.pending_check_in
+            .as_ref()
+            .map(|pending| (pending.mode, pending.step_index))
+    }
+
     pub fn take_check_in_event(&mut self) -> Option<CheckInEvent> {
         self.pending_check_in_event.take()
     }

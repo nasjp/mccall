@@ -1,5 +1,5 @@
 use crate::app_error::AppError;
-use crate::audio_manager::{AudioManager, SoundEvent, SoundPlaybackReason};
+use crate::audio_manager::{AudioManager, SoundEvent, SoundPlaybackReason, SoundPlaybackRecord};
 use crate::events::emit_app_error;
 use crate::models::{SoundOverride, SoundScheme, SoundSetting, Step};
 use crate::timer_engine::TimerEngine;
@@ -28,13 +28,13 @@ pub fn build_sound_context(engine: &TimerEngine, step: Option<&Step>) -> Option<
     })
 }
 
-pub fn play_sound_for_event(app: &AppHandle, context: Option<SoundContext>, event: SoundEvent) {
-    let Some(context) = context else {
-        return;
-    };
-    let Some(audio_state) = app.try_state::<Mutex<AudioManager>>() else {
-        return;
-    };
+pub fn play_sound_for_event(
+    app: &AppHandle,
+    context: Option<SoundContext>,
+    event: SoundEvent,
+) -> Option<SoundPlaybackRecord> {
+    let context = context?;
+    let audio_state = app.try_state::<Mutex<AudioManager>>()?;
 
     let mut manager = match audio_state.lock() {
         Ok(guard) => guard,
@@ -43,7 +43,7 @@ pub fn play_sound_for_event(app: &AppHandle, context: Option<SoundContext>, even
                 app,
                 AppError::system("サウンド状態の取得に失敗しました").payload(),
             );
-            return;
+            return None;
         }
     };
 
@@ -63,4 +63,5 @@ pub fn play_sound_for_event(app: &AppHandle, context: Option<SoundContext>, even
             AppError::audio("サウンドを再生できませんでした。視覚通知で継続します").payload(),
         );
     }
+    Some(record)
 }

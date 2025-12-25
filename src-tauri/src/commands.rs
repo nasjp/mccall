@@ -105,7 +105,7 @@ pub async fn respond_to_check_in(
     timer_engine: State<'_, Mutex<TimerEngine>>,
     app: AppHandle,
 ) -> Result<(), String> {
-    timer_actions::respond_to_check_in(response.choice, &timer_engine, &app)
+    timer_actions::respond_to_check_in(response, &timer_engine, &app)
         .map_err(|err| report_error(&app, err))?;
     menu_bar::sync_menu_bar(&app);
     Ok(())
@@ -131,6 +131,13 @@ pub async fn toggle_global_mute(
     if muted {
         if let Some(data_manager) = app.try_state::<DataManager>() {
             let _ = session_recovery::mark_muted(&data_manager);
+        }
+        if let Some(tracker_state) =
+            app.try_state::<Mutex<crate::session_tracker::SessionTracker>>()
+        {
+            if let Ok(mut tracker) = tracker_state.lock() {
+                tracker.mark_muted();
+            }
         }
     }
     menu_bar::sync_menu_bar(&app);

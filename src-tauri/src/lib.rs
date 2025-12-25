@@ -13,6 +13,7 @@ mod recovery_state;
 mod runtime_state;
 mod session_recovery;
 mod session_stats;
+mod session_tracker;
 mod sound_actions;
 mod timer_actions;
 #[allow(dead_code)]
@@ -24,8 +25,11 @@ use crate::events::{
     emit_app_error, emit_check_in_required, emit_check_in_timeout, emit_step_changed,
     emit_timer_stopped, emit_timer_tick,
 };
+use crate::models::StepRunResult;
+use crate::session_tracker::SessionTracker;
 use crate::sound_actions::{build_sound_context, play_sound_for_event};
 use crate::timer_engine::{AdvanceResult, TimerEngine, TimerError};
+use chrono::Utc;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -42,6 +46,7 @@ pub fn run() {
             app.manage(Mutex::new(timer_engine::TimerEngine::new()));
             app.manage(Mutex::new(audio_manager::AudioManager::new()));
             app.manage(Mutex::new(runtime_state::RuntimeState::default()));
+            app.manage(Mutex::new(session_tracker::SessionTracker::new()));
             let app_handle = app.handle();
             let menu = menu_bar::create_menu_bar(app_handle)?;
             app.manage(Mutex::new(menu));
@@ -87,6 +92,8 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
             continue;
         }
 
+        let previous_step = engine.current_step().cloned();
+        let previous_remaining = engine.remaining_time().ok();
         let routine_base_context = build_sound_context(&engine, None);
         let advance_result = match engine.advance_if_needed() {
             Ok(result) => result,
@@ -114,7 +121,7 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
             engine
                 .step_at(event.step_index)
                 .cloned()
-                .map(|step| (event.config, step))
+                .map(|step| (event.config, step, event.blocking))
         });
 
         let check_in_timeout = engine
@@ -149,13 +156,92 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
                 let _ = session_recovery::clear_active_session(&data_manager);
             }
         }
+
+        let step_sound_record = step_sound_context.as_ref().and_then(|context| {
+            play_sound_for_event(
+                &app_handle,
+                Some(context.clone()),
+                SoundEvent::StepTransition,
+            )
+        });
+        if let Some(context) = routine_sound_context {
+            let _ = play_sound_for_event(&app_handle, Some(context), SoundEvent::RoutineCompleted);
+        }
+
+        if let Some(tracker_state) = app_handle.try_state::<Mutex<SessionTracker>>() {
+            if let Ok(mut tracker) = tracker_state.lock() {
+                if let Some((_check_in, step, blocking)) = check_in_required.as_ref() {
+                    if *blocking {
+                        tracker.finalize_current_step(
+                            &step.id,
+                            StepRunResult::Completed,
+                            step.duration_seconds,
+                            now_rfc3339(),
+                        );
+                    }
+                }
+
+                if let Some((step, _)) = step_changed.as_ref() {
+                    if let Some(prev_step) = previous_step.as_ref() {
+                        tracker.finalize_current_step(
+                            &prev_step.id,
+                            StepRunResult::Completed,
+                            prev_step.duration_seconds,
+                            now_rfc3339(),
+                        );
+                    }
+                    let sound_played = step_sound_record
+                        .as_ref()
+                        .map(|record| record.played)
+                        .unwrap_or(false);
+                    tracker.start_step(step, sound_played);
+                }
+
+                if let Some(step_id) = check_in_timeout.as_ref() {
+                    tracker.record_check_in_timeout(step_id);
+                }
+
+                if routine_completed {
+                    if let Some(prev_step) = previous_step.as_ref() {
+                        let remaining_seconds = previous_remaining
+                            .as_ref()
+                            .map(|duration| duration.as_secs().min(u32::MAX as u64) as u32)
+                            .unwrap_or(0);
+                        let actual_duration =
+                            prev_step.duration_seconds.saturating_sub(remaining_seconds);
+                        let result = if remaining_seconds > 0 {
+                            StepRunResult::Aborted
+                        } else {
+                            StepRunResult::Completed
+                        };
+                        tracker.finalize_current_step(
+                            &prev_step.id,
+                            result,
+                            actual_duration,
+                            now_rfc3339(),
+                        );
+                    }
+
+                    if let Some(session) = tracker.finish_session(now_rfc3339()) {
+                        if let Some(data_manager) =
+                            app_handle.try_state::<data_manager::DataManager>()
+                        {
+                            if let Err(err) = data_manager.save_session(session) {
+                                eprintln!("Failed to save session: {err}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if let Some((remaining_seconds, step_name)) = tick_payload {
             emit_timer_tick(&app_handle, remaining_seconds, step_name);
         }
         if let Some((step, step_index)) = step_changed {
             emit_step_changed(&app_handle, step, step_index);
         }
-        if let Some((check_in, step)) = check_in_required {
+        if let Some((check_in, step, _blocking)) = check_in_required {
             emit_check_in_required(&app_handle, check_in, step);
         }
         if let Some(step_id) = check_in_timeout {
@@ -164,12 +250,10 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
         if routine_completed {
             emit_timer_stopped(&app_handle);
         }
-        if let Some(context) = step_sound_context {
-            play_sound_for_event(&app_handle, Some(context), SoundEvent::StepTransition);
-        }
-        if let Some(context) = routine_sound_context {
-            play_sound_for_event(&app_handle, Some(context), SoundEvent::RoutineCompleted);
-        }
         menu_bar::sync_menu_bar(&app_handle);
     });
+}
+
+fn now_rfc3339() -> String {
+    Utc::now().to_rfc3339()
 }

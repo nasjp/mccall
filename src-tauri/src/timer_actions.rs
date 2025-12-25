@@ -4,11 +4,13 @@ use crate::data_manager::DataManager;
 use crate::events::{
     emit_step_changed, emit_timer_paused, emit_timer_resumed, emit_timer_stopped, emit_timer_tick,
 };
-use crate::models::{CheckInChoice, Routine, Step};
+use crate::models::{CheckInChoice, CheckInMode, CheckInResponse, Routine, Step, StepRunResult};
 use crate::runtime_state::RuntimeState;
 use crate::session_recovery;
+use crate::session_tracker::SessionTracker;
 use crate::sound_actions::{build_sound_context, play_sound_for_event};
 use crate::timer_engine::{AdvanceResult, TimerEngine};
+use chrono::Utc;
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
@@ -69,6 +71,7 @@ pub fn start_routine(
     app: &AppHandle,
 ) -> Result<(), AppError> {
     let routine_id = routine.id.clone();
+    let routine_snapshot = routine.clone();
     let mut engine = timer_engine.lock().map_err(|_| timer_lock_error())?;
     engine.start_routine(routine).map_err(AppError::from)?;
     let current_step = engine.current_step().cloned();
@@ -93,6 +96,11 @@ pub fn start_routine(
             .unwrap_or(false);
         session_recovery::start_active_session(data_manager, &routine_id, &step, muted)
             .map_err(AppError::from)?;
+        if let Some(tracker_state) = app.try_state::<Mutex<SessionTracker>>() {
+            if let Ok(mut tracker) = tracker_state.lock() {
+                tracker.start_session(&routine_snapshot, &step, muted);
+            }
+        }
     }
     if let Some((step, step_index)) = step_changed {
         emit_step_changed(app, step, step_index);
@@ -127,6 +135,27 @@ pub fn resume_timer(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Resul
 
 pub fn skip_step(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(), AppError> {
     let mut engine = timer_engine.lock().map_err(|_| timer_lock_error())?;
+    let pending_gate = engine
+        .pending_check_in()
+        .map(|(mode, step_index)| {
+            mode == CheckInMode::Gate
+                && engine
+                    .current_step_index()
+                    .map(|current| current == step_index)
+                    .unwrap_or(false)
+        })
+        .unwrap_or(false);
+    let current_step = engine.current_step().cloned();
+    let remaining_seconds = engine
+        .remaining_time()
+        .ok()
+        .map(|duration| duration.as_secs().min(u32::MAX as u64) as u32)
+        .unwrap_or(0);
+    let planned_seconds = current_step
+        .as_ref()
+        .map(|step| step.duration_seconds)
+        .unwrap_or(0);
+    let actual_seconds = planned_seconds.saturating_sub(remaining_seconds);
     let routine_base_context = build_sound_context(&engine, None);
     let result = engine.skip_current_step().map_err(AppError::from)?;
     let (step_changed, routine_completed) = capture_advance_events(&engine, &result);
@@ -139,18 +168,59 @@ pub fn skip_step(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(
         None
     };
     drop(engine);
-    if let Some((step, step_index)) = step_changed {
+    if let Some((step, step_index)) = step_changed.as_ref() {
         if let Some(manager) = app.try_state::<DataManager>() {
-            session_recovery::update_active_step(&manager, &step).map_err(AppError::from)?;
+            session_recovery::update_active_step(&manager, step).map_err(AppError::from)?;
         }
-        emit_step_changed(app, step, step_index);
-        play_sound_for_event(app, step_sound_context, SoundEvent::StepTransition);
+        emit_step_changed(app, step.clone(), *step_index);
     }
     if routine_completed {
         emit_timer_stopped(app);
-        play_sound_for_event(app, routine_sound_context, SoundEvent::RoutineCompleted);
         if let Some(manager) = app.try_state::<DataManager>() {
             session_recovery::clear_active_session(&manager).map_err(AppError::from)?;
+        }
+    }
+    let step_sound_record =
+        play_sound_for_event(app, step_sound_context, SoundEvent::StepTransition);
+    let _ = play_sound_for_event(app, routine_sound_context, SoundEvent::RoutineCompleted);
+
+    if let Some(tracker_state) = app.try_state::<Mutex<SessionTracker>>() {
+        if let Ok(mut tracker) = tracker_state.lock() {
+            if pending_gate {
+                if let Some(step) = current_step.as_ref() {
+                    tracker.record_check_in_response(
+                        &step.id,
+                        CheckInChoice::Skip,
+                        Some(now_rfc3339()),
+                        None,
+                    );
+                }
+            } else if let Some(step) = current_step.as_ref() {
+                tracker.finalize_current_step(
+                    &step.id,
+                    StepRunResult::Skipped,
+                    actual_seconds,
+                    now_rfc3339(),
+                );
+            }
+
+            if let Some((step, _)) = step_changed.as_ref() {
+                let sound_played = step_sound_record
+                    .as_ref()
+                    .map(|record| record.played)
+                    .unwrap_or(false);
+                tracker.start_step(step, sound_played);
+            }
+
+            if routine_completed {
+                if let Some(session) = tracker.finish_session(now_rfc3339()) {
+                    if let Some(manager) = app.try_state::<DataManager>() {
+                        if let Err(err) = manager.save_session(session) {
+                            eprintln!("Failed to save session: {err}");
+                        }
+                    }
+                }
+            }
         }
     }
     Ok(())
@@ -158,23 +228,55 @@ pub fn skip_step(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(
 
 pub fn stop_timer(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(), AppError> {
     let mut engine = timer_engine.lock().map_err(|_| timer_lock_error())?;
+    let current_step = engine.current_step().cloned();
+    let remaining_seconds = engine
+        .remaining_time()
+        .ok()
+        .map(|duration| duration.as_secs().min(u32::MAX as u64) as u32)
+        .unwrap_or(0);
+    let planned_seconds = current_step
+        .as_ref()
+        .map(|step| step.duration_seconds)
+        .unwrap_or(0);
+    let actual_seconds = planned_seconds.saturating_sub(remaining_seconds);
     engine.stop().map_err(AppError::from)?;
     drop(engine);
     emit_timer_stopped(app);
     if let Some(manager) = app.try_state::<DataManager>() {
         session_recovery::clear_active_session(&manager).map_err(AppError::from)?;
     }
+    if let Some(tracker_state) = app.try_state::<Mutex<SessionTracker>>() {
+        if let Ok(mut tracker) = tracker_state.lock() {
+            if let Some(step) = current_step.as_ref() {
+                tracker.finalize_current_step(
+                    &step.id,
+                    StepRunResult::Aborted,
+                    actual_seconds,
+                    now_rfc3339(),
+                );
+            }
+            if let Some(session) = tracker.finish_session(now_rfc3339()) {
+                if let Some(manager) = app.try_state::<DataManager>() {
+                    if let Err(err) = manager.save_session(session) {
+                        eprintln!("Failed to save session: {err}");
+                    }
+                }
+            }
+        }
+    }
     Ok(())
 }
 
 pub fn respond_to_check_in(
-    choice: CheckInChoice,
+    response: CheckInResponse,
     timer_engine: &Mutex<TimerEngine>,
     app: &AppHandle,
 ) -> Result<(), AppError> {
     let mut engine = timer_engine.lock().map_err(|_| timer_lock_error())?;
     let routine_base_context = build_sound_context(&engine, None);
-    let result = engine.respond_to_check_in(choice).map_err(AppError::from)?;
+    let result = engine
+        .respond_to_check_in(response.choice)
+        .map_err(AppError::from)?;
     let (step_changed, routine_completed) = capture_advance_events(&engine, &result);
     let step_sound_context = step_changed
         .as_ref()
@@ -185,19 +287,53 @@ pub fn respond_to_check_in(
         None
     };
     drop(engine);
-    if let Some((step, step_index)) = step_changed {
+    if let Some((step, step_index)) = step_changed.as_ref() {
         if let Some(manager) = app.try_state::<DataManager>() {
-            session_recovery::update_active_step(&manager, &step).map_err(AppError::from)?;
+            session_recovery::update_active_step(&manager, step).map_err(AppError::from)?;
         }
-        emit_step_changed(app, step, step_index);
-        play_sound_for_event(app, step_sound_context, SoundEvent::StepTransition);
+        emit_step_changed(app, step.clone(), *step_index);
     }
     if routine_completed {
         emit_timer_stopped(app);
-        play_sound_for_event(app, routine_sound_context, SoundEvent::RoutineCompleted);
         if let Some(manager) = app.try_state::<DataManager>() {
             session_recovery::clear_active_session(&manager).map_err(AppError::from)?;
         }
     }
+    let step_sound_record =
+        play_sound_for_event(app, step_sound_context, SoundEvent::StepTransition);
+    let _ = play_sound_for_event(app, routine_sound_context, SoundEvent::RoutineCompleted);
+
+    if let Some(tracker_state) = app.try_state::<Mutex<SessionTracker>>() {
+        if let Ok(mut tracker) = tracker_state.lock() {
+            tracker.record_check_in_response(
+                &response.step_id,
+                response.choice,
+                response.responded_at.clone(),
+                response.response_time_ms,
+            );
+
+            if let Some((step, _)) = step_changed.as_ref() {
+                let sound_played = step_sound_record
+                    .as_ref()
+                    .map(|record| record.played)
+                    .unwrap_or(false);
+                tracker.start_step(step, sound_played);
+            }
+
+            if routine_completed {
+                if let Some(session) = tracker.finish_session(now_rfc3339()) {
+                    if let Some(manager) = app.try_state::<DataManager>() {
+                        if let Err(err) = manager.save_session(session) {
+                            eprintln!("Failed to save session: {err}");
+                        }
+                    }
+                }
+            }
+        }
+    }
     Ok(())
+}
+
+fn now_rfc3339() -> String {
+    Utc::now().to_rfc3339()
 }
