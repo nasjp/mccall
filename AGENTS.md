@@ -84,3 +84,5 @@ bun run e2e
 
 * **標準セット（Lint/型/テスト）:** `bun run ci`
 * **フルセット（マージ前推奨）:** `bun run ci && bun run build && bun run e2e`
+
+---
