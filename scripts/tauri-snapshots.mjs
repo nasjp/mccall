@@ -26,9 +26,17 @@ const resolveDriverBinary = (root) => {
 const rootDir = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const outputDir = path.join(rootDir, "test-results", "ui");
 const dataDir = path.join(rootDir, ".tauri-test-data");
+const isDarwin = process.platform === "darwin";
+const remoteWebDriverUrl = process.env.REMOTE_WEBDRIVER_URL;
 const driverPort = Number(process.env.TAURI_DRIVER_PORT ?? 4444);
 const appBinary = resolveAppBinary(rootDir);
 const driverBin = resolveDriverBinary(rootDir);
+const appName = "mccall";
+const viewShortcuts = {
+  timer: "1",
+  editor: "2",
+  stats: "3",
+};
 
 const routine = {
   id: "routine-snapshot",
@@ -135,12 +143,41 @@ const run = async () => {
   await prepareData();
   await fs.mkdir(outputDir, { recursive: true });
 
+  if (isDarwin) {
+    await runMacSnapshots();
+    return;
+  }
+
+  await runWebDriverSnapshots();
+};
+
+const ensureBuild = async () => {
+  if (process.env.MCCALL_SKIP_TAURI_BUILD) {
+    return;
+  }
+  const result = spawnSync(
+    "bun",
+    ["run", "tauri", "build", "--debug", "--no-bundle"],
+    {
+      cwd: rootDir,
+      stdio: "inherit",
+    },
+  );
+  if (result.status !== 0) {
+    throw new Error("tauri build failed");
+  }
+};
+
+const runWebDriverSnapshots = async () => {
+  const driverEnv = {
+    ...process.env,
+    MCCALL_DATA_DIR: dataDir,
+    ...(remoteWebDriverUrl ? { REMOTE_WEBDRIVER_URL: remoteWebDriverUrl } : {}),
+  };
+
   const driverProcess = spawn(driverBin, ["--port", String(driverPort)], {
     stdio: "inherit",
-    env: {
-      ...process.env,
-      MCCALL_DATA_DIR: dataDir,
-    },
+    env: driverEnv,
   });
 
   try {
@@ -196,22 +233,42 @@ const run = async () => {
   }
 };
 
-const ensureBuild = async () => {
-  if (process.env.MCCALL_SKIP_TAURI_BUILD) {
-    return;
-  }
-  const result = spawnSync(
-    "bun",
-    ["run", "tauri", "build", "--debug", "--no-bundle"],
-    {
-      cwd: rootDir,
-      stdio: "inherit",
+const runMacSnapshots = async () => {
+  ensureUiScriptingEnabled();
+  const appProcess = spawn(appBinary, [], {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      MCCALL_DATA_DIR: dataDir,
     },
-  );
-  if (result.status !== 0) {
-    throw new Error("tauri build failed");
+  });
+
+  try {
+    await delay(500);
+    const processName = resolveProcessName(appName);
+    await waitForWindow(processName, 15_000);
+    await activateApp(processName);
+
+    await setWindowSize(processName, 1200, 800);
+    await switchView(processName, viewShortcuts.timer);
+    await delay(400);
+    await captureWindow(processName, path.join(outputDir, "Timer.png"));
+
+    await setWindowSize(processName, 1200, 1000);
+    await switchView(processName, viewShortcuts.editor);
+    await delay(600);
+    await captureWindow(processName, path.join(outputDir, "Edit.png"));
+
+    await setWindowSize(processName, 1200, 800);
+    await switchView(processName, viewShortcuts.stats);
+    await delay(600);
+    await captureWindow(processName, path.join(outputDir, "Stats.png"));
+  } finally {
+    appProcess.kill();
   }
 };
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const prepareData = async () => {
   await fs.mkdir(dataDir, { recursive: true });
@@ -328,6 +385,155 @@ const startOfWeek = (date) => {
 
 const writeJson = async (filePath, value) => {
   await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+};
+
+const runAppleScript = (lines, { allowFailure = false } = {}) => {
+  const args = [];
+  for (const line of lines) {
+    args.push("-e", line);
+  }
+  const result = spawnSync("osascript", args, { encoding: "utf-8" });
+  if (result.status !== 0) {
+    if (allowFailure) {
+      return "";
+    }
+    throw new Error(result.stderr?.trim() || "osascript failed");
+  }
+  return result.stdout.trim();
+};
+
+const getWindowBounds = (processName) => {
+  const output = runAppleScript(
+    [
+      'tell application "System Events"',
+      `if exists process "${processName}" then`,
+      `tell process "${processName}"`,
+      "if exists window 1 then",
+      "set p to position of window 1",
+      "set s to size of window 1",
+      'return (item 1 of p as text) & "," & (item 2 of p as text) & "," & (item 1 of s as text) & "," & (item 2 of s as text)',
+      "end if",
+      "end tell",
+      "end if",
+      "end tell",
+    ],
+    { allowFailure: true },
+  );
+  if (!output) {
+    return null;
+  }
+  const parts = output.split(",").map((value) => Number(value.trim()));
+  if (parts.length !== 4 || parts.some((value) => Number.isNaN(value))) {
+    return null;
+  }
+  const [left, top, width, height] = parts;
+  return {
+    left,
+    top,
+    width,
+    height,
+  };
+};
+
+const waitForWindow = async (processName, timeoutMs) => {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const bounds = getWindowBounds(processName);
+    if (bounds) {
+      return bounds;
+    }
+    await delay(200);
+  }
+  throw new Error(
+    `Window for ${processName} did not appear in time. Check Accessibility permissions for System Events.`,
+  );
+};
+
+const ensureUiScriptingEnabled = () => {
+  const output = runAppleScript(
+    ['tell application "System Events" to get UI elements enabled'],
+    { allowFailure: true },
+  );
+  if (output.toLowerCase() !== "true") {
+    throw new Error(
+      "UI scripting is not enabled. Allow Accessibility permissions for the terminal running this script.",
+    );
+  }
+};
+
+const activateApp = async (processName) => {
+  runAppleScript([
+    'tell application "System Events"',
+    `tell process "${processName}" to set frontmost to true`,
+    "end tell",
+  ]);
+  await delay(300);
+};
+
+const setWindowSize = async (processName, width, height) => {
+  const bounds = getWindowBounds(processName);
+  if (!bounds) {
+    throw new Error(`Unable to read window bounds for ${processName}.`);
+  }
+  runAppleScript([
+    'tell application "System Events"',
+    `tell process "${processName}"`,
+    `set position of window 1 to {${bounds.left}, ${bounds.top}}`,
+    `set size of window 1 to {${width}, ${height}}`,
+    "end tell",
+    "end tell",
+  ]);
+  await delay(200);
+};
+
+const switchView = async (processName, key) => {
+  runAppleScript([
+    'tell application "System Events"',
+    `tell process "${processName}"`,
+    `keystroke "${key}" using command down`,
+    "end tell",
+    "end tell",
+  ]);
+  await delay(200);
+};
+
+const resolveProcessName = (preferred) => {
+  const candidate = findProcessNameBySubstring(preferred);
+  return candidate ?? preferred;
+};
+
+const findProcessNameBySubstring = (needle) => {
+  const output = runAppleScript(
+    [
+      'tell application "System Events"',
+      `set matches to (application processes whose name contains "${needle}")`,
+      "if (count of matches) > 0 then",
+      "return name of item 1 of matches",
+      "end if",
+      "end tell",
+    ],
+    { allowFailure: true },
+  );
+  return output || null;
+};
+
+const captureWindow = async (processName, filePath) => {
+  const bounds = getWindowBounds(processName);
+  if (!bounds) {
+    throw new Error(`Unable to read window bounds for ${processName}.`);
+  }
+  const region = [
+    Math.round(bounds.left),
+    Math.round(bounds.top),
+    Math.round(bounds.width),
+    Math.round(bounds.height),
+  ].join(",");
+  const result = spawnSync("screencapture", ["-x", "-R", region, filePath], {
+    stdio: "inherit",
+  });
+  if (result.status !== 0) {
+    throw new Error("screencapture failed");
+  }
 };
 
 const waitForPort = (port, timeoutMs) =>

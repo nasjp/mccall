@@ -206,3 +206,6 @@
 - [x] 18.1 TauriベースのUIスナップショットへ移行（Done）
   - tauri-driver経由で実アプリUIのスナップショットを取得
   - テスト用データ投入と実行手順を整備
+
+- [x] 18.2 macOS向けローカルスナップショット実行の補強（Done）
+  - AppleScript + screencapture で外部APIなしの実行フローを追加

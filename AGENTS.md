@@ -96,9 +96,8 @@ bun run e2e:snapshots
 ```
 
 注意:
-- macOSは`@crabnebula/tauri-driver`が必要（`CN_API_KEY`設定が必要な場合あり）
+- macOSはAppleScript + `screencapture` で取得（初回はターミナル/`node`にアクセシビリティ/画面収録の許可が必要）
 - テスト用データは`.tauri-test-data`に投入されます
-- 旧Playwright版は `bun run e2e:snapshots:web`
 
 出力先:
 - `test-results/ui/Timer.png`
