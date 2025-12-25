@@ -469,7 +469,74 @@ body {
 
 .stats-view {
   display: grid;
+  gap: var(--space-16);
+}
+
+.stats-view__header {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.stats-view__subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: GrayText;
+}
+
+.stats-view__grid {
+  display: grid;
   gap: var(--space-12);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.stats-card {
+  display: grid;
+  gap: var(--space-12);
+  padding: var(--space-12);
+  border-radius: var(--radius-card);
+  border: 1px solid ButtonBorder;
+  background-color: Canvas;
+}
+
+.stats-card__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.stats-card__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.stats-card__note {
+  font-size: 12px;
+  color: GrayText;
+}
+
+.stats-card__list {
+  margin: 0;
+  display: grid;
+  gap: var(--space-8);
+}
+
+.stats-card__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-12);
+  font-size: 13px;
+}
+
+.stats-card__label {
+  color: GrayText;
+}
+
+.stats-card__value {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 720px) {

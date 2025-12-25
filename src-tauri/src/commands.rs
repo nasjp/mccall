@@ -3,6 +3,7 @@ use crate::data_manager::DataManager;
 use crate::menu_bar;
 use crate::models::{CheckInResponse, Routine, SessionStats, TimerState};
 use crate::runtime_state::RuntimeState;
+use crate::session_stats::calculate_session_stats;
 use crate::timer_actions;
 use crate::timer_engine::TimerEngine;
 use std::sync::Mutex;
@@ -114,6 +115,13 @@ pub async fn toggle_global_mute(
 }
 
 #[tauri::command]
-pub async fn get_session_stats(_from: String, _to: String) -> Result<SessionStats, String> {
-    Ok(SessionStats::default())
+pub async fn get_session_stats(
+    from: String,
+    to: String,
+    data_manager: State<'_, DataManager>,
+) -> Result<SessionStats, String> {
+    let sessions = data_manager
+        .load_sessions_in_range(&from, &to)
+        .map_err(|err| err.to_string())?;
+    Ok(calculate_session_stats(&sessions))
 }

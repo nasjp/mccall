@@ -9,6 +9,7 @@ import "./App.css";
 import { CheckInDialog } from "./components/CheckInDialog";
 import { CheckInPrompt } from "./components/CheckInPrompt";
 import { RoutineEditor } from "./components/RoutineEditor";
+import { StatsView } from "./components/StatsView";
 import { StepNotificationToast } from "./components/StepNotificationToast";
 import { TimerView } from "./components/TimerView";
 import { useTimerShortcuts } from "./hooks/useTimerShortcuts";
@@ -281,12 +282,7 @@ const AppContent = () => {
       />
     );
   } else if (state.currentView === "stats") {
-    content = (
-      <section className="panel stats-view" aria-label="統計">
-        <h2 className="section-title">Stats</h2>
-        <p className="empty-text">準備中</p>
-      </section>
-    );
+    content = <StatsView />;
   } else {
     content = (
       <TimerView

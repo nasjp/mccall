@@ -9,6 +9,7 @@ mod global_shortcuts;
 mod menu_bar;
 mod models;
 mod runtime_state;
+mod session_stats;
 mod timer_actions;
 #[allow(dead_code)]
 mod timer_engine;
