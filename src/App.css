@@ -65,6 +65,18 @@ body {
   color: GrayText;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
 .timer-view {
   width: min(520px, 100%);
   display: grid;
@@ -81,6 +93,10 @@ body {
   color: CanvasText;
   padding: 6px 12px;
   border-radius: var(--radius-pill);
+}
+
+.timer-view__badge--note {
+  background-color: color-mix(in srgb, Highlight 12%, Canvas 88%);
 }
 
 .timer-view__time {
