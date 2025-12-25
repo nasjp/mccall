@@ -22,6 +22,7 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
+tauri-plugin-automation = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = "0.4"

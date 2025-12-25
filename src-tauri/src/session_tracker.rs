@@ -195,6 +195,20 @@ impl SessionTracker {
             muted_during_session: active.muted_during_session,
         })
     }
+
+    pub fn current_session(&self) -> Option<Session> {
+        let active = self.active.as_ref()?;
+        let totals = build_totals(active);
+        Some(Session {
+            id: active.id.clone(),
+            routine_id: active.routine_id.clone(),
+            started_at: active.started_at.clone(),
+            ended_at: None,
+            step_runs: active.step_runs.clone(),
+            totals,
+            muted_during_session: active.muted_during_session,
+        })
+    }
 }
 
 impl ActiveSession {

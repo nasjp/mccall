@@ -7,6 +7,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import type { AppSettings, Routine, TimerState } from "./types/mccall";
@@ -121,6 +122,36 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
   });
 
+  test("confirms stop before invoking stop_timer", async () => {
+    const routine = buildRoutine();
+    const timerState = buildTimerState({ isRunning: true });
+    const user = userEvent.setup();
+
+    setupInvoke(timerState, [routine]);
+
+    render(<App />);
+
+    await screen.findByText("集中");
+
+    await user.click(screen.getByRole("button", { name: "Stop" }));
+
+    const dialog = await screen.findByRole("alertdialog", {
+      name: "セッションを終了しますか？",
+    });
+    const stopCallsBefore = invokeMock.mock.calls.filter(
+      ([command]) => command === "stop_timer",
+    ).length;
+
+    await user.click(within(dialog).getByRole("button", { name: "Stop" }));
+
+    await waitFor(() => {
+      const stopCallsAfter = invokeMock.mock.calls.filter(
+        ([command]) => command === "stop_timer",
+      ).length;
+      expect(stopCallsAfter).toBe(stopCallsBefore + 1);
+    });
+  });
+
   test("shows gate check-in dialog with fallback title", async () => {
     const routine = buildRoutine();
     const timerState = buildTimerState({
@@ -163,5 +194,27 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByText("0:45")).toBeInTheDocument();
     });
+  });
+
+  test("switches views via buttons and shortcuts", async () => {
+    const routine = buildRoutine();
+    const timerState = buildTimerState({ remainingSeconds: 60 });
+    const user = userEvent.setup();
+
+    setupInvoke(timerState, [routine]);
+
+    render(<App />);
+
+    await screen.findByText("集中");
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(
+      await screen.findByRole("heading", { name: "Routines" }),
+    ).toBeInTheDocument();
+
+    await user.keyboard("{Meta>}3{/Meta}");
+    expect(
+      await screen.findByRole("heading", { name: "Stats" }),
+    ).toBeInTheDocument();
   });
 });

@@ -1853,7 +1853,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e9ec52138abedcc58dc17a7c6c0c00a2bdb4f3427c7f63fa97fd0d859155caf"
 dependencies = [
  "gtk-sys",
- "libloading",
+ "libloading 0.7.4",
  "once_cell",
 ]
 
@@ -1871,6 +1871,16 @@ checksum = "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f"
 dependencies = [
  "cfg-if",
  "winapi",
+]
+
+[[package]]
+name = "libloading"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
+dependencies = [
+ "cfg-if",
+ "windows-link 0.2.1",
 ]
 
 [[package]]
@@ -1968,6 +1978,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "tauri-plugin-automation",
  "tauri-plugin-global-shortcut",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
@@ -3715,6 +3726,20 @@ dependencies = [
  "tauri-utils",
  "toml 0.9.10+spec-1.1.0",
  "walkdir",
+]
+
+[[package]]
+name = "tauri-plugin-automation"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa45d3573de0fc3dd3e26ad22d638c59e762a98122eda9b88e7bc6ae76f1c743"
+dependencies = [
+ "libloading 0.8.9",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -1,0 +1,82 @@
+[
+  {
+    "id": "session-1",
+    "routineId": "routine-snapshot",
+    "startedAt": "2025-12-25T00:00:00.000Z",
+    "endedAt": null,
+    "stepRuns": [],
+    "totals": {
+      "totalSeconds": 1800,
+      "workSeconds": 1200,
+      "breakSeconds": 600,
+      "cyclesCount": 1,
+      "checkInDoneCount": 2,
+      "checkInSkipCount": 1
+    },
+    "mutedDuringSession": false
+  },
+  {
+    "id": "session-2",
+    "routineId": "routine-snapshot",
+    "startedAt": "2025-12-25T03:00:00.000Z",
+    "endedAt": null,
+    "stepRuns": [],
+    "totals": {
+      "totalSeconds": 1200,
+      "workSeconds": 900,
+      "breakSeconds": 300,
+      "cyclesCount": 1,
+      "checkInDoneCount": 1,
+      "checkInSkipCount": 0
+    },
+    "mutedDuringSession": true
+  },
+  {
+    "id": "session-3",
+    "routineId": "routine-snapshot",
+    "startedAt": "2025-12-25T06:00:00.000Z",
+    "endedAt": null,
+    "stepRuns": [],
+    "totals": {
+      "totalSeconds": 900,
+      "workSeconds": 600,
+      "breakSeconds": 300,
+      "cyclesCount": 1,
+      "checkInDoneCount": 0,
+      "checkInSkipCount": 1
+    },
+    "mutedDuringSession": false
+  },
+  {
+    "id": "session-4",
+    "routineId": "routine-snapshot",
+    "startedAt": "2025-12-23T01:00:00.000Z",
+    "endedAt": null,
+    "stepRuns": [],
+    "totals": {
+      "totalSeconds": 1500,
+      "workSeconds": 1100,
+      "breakSeconds": 400,
+      "cyclesCount": 1,
+      "checkInDoneCount": 2,
+      "checkInSkipCount": 0
+    },
+    "mutedDuringSession": false
+  },
+  {
+    "id": "session-5",
+    "routineId": "routine-snapshot",
+    "startedAt": "2025-12-24T05:00:00.000Z",
+    "endedAt": null,
+    "stepRuns": [],
+    "totals": {
+      "totalSeconds": 600,
+      "workSeconds": 450,
+      "breakSeconds": 150,
+      "cyclesCount": 1,
+      "checkInDoneCount": 1,
+      "checkInSkipCount": 0
+    },
+    "mutedDuringSession": true
+  }
+]

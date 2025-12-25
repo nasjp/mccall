@@ -17,6 +17,8 @@
     "rust:clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
     "ci": "bun run lint && bun run typecheck && bun run test && bun run rust:fmt && bun run rust:clippy && bun run rust:test",
     "e2e": "playwright test",
+    "e2e:snapshots": "node scripts/tauri-snapshots.mjs",
+    "e2e:snapshots:web": "playwright test e2e/ui-snapshots.spec.ts",
     "e2e:ui": "playwright test --ui",
     "e2e:headed": "playwright test --headed",
     "e2e:debug": "PWDEBUG=1 playwright test --headed",
@@ -31,6 +33,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
+    "@crabnebula/tauri-driver": "^2.0.8",
     "@playwright/test": "^1.57.0",
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6.9.1",
@@ -42,6 +45,7 @@
     "jsdom": "^27.3.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.16",
+    "webdriverio": "^9.22.0"
   }
 }

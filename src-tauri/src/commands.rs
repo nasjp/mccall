@@ -7,6 +7,7 @@ use crate::models::{AppSettings, CheckInResponse, Routine, SessionStats, TimerSt
 use crate::runtime_state::RuntimeState;
 use crate::session_recovery;
 use crate::session_stats::calculate_session_stats;
+use crate::session_tracker::SessionTracker;
 use crate::timer_actions;
 use crate::timer_engine::TimerEngine;
 use std::sync::Mutex;
@@ -73,8 +74,48 @@ pub async fn stop_timer(
 }
 
 #[tauri::command]
-pub async fn get_timer_state() -> Result<TimerState, String> {
-    Ok(TimerState::default())
+pub async fn get_timer_state(
+    timer_engine: State<'_, Mutex<TimerEngine>>,
+    session_tracker: State<'_, Mutex<SessionTracker>>,
+    app: AppHandle,
+) -> Result<TimerState, String> {
+    let engine = timer_engine
+        .lock()
+        .map_err(|_| report_error(&app, AppError::system("タイマー状態の取得に失敗しました")))?;
+
+    let is_running = engine.is_running();
+    let is_paused = engine.is_paused();
+    let current_step_index = engine.current_step_index().unwrap_or(0) as u32;
+    let remaining_seconds = engine
+        .remaining_time()
+        .ok()
+        .map(|duration| duration.as_secs().min(u32::MAX as u64) as u32)
+        .unwrap_or(0);
+    let awaiting_step = engine
+        .pending_check_in()
+        .and_then(|(_mode, step_index)| engine.step_at(step_index).cloned());
+    let awaiting_check_in = awaiting_step.as_ref().map(|step| step.check_in.clone());
+    let awaiting_check_in_step = awaiting_step;
+    drop(engine);
+
+    let current_session = if is_running {
+        let tracker = session_tracker.lock().map_err(|_| {
+            report_error(&app, AppError::system("セッション状態の取得に失敗しました"))
+        })?;
+        tracker.current_session()
+    } else {
+        None
+    };
+
+    Ok(TimerState {
+        is_running,
+        is_paused,
+        current_session,
+        current_step_index,
+        remaining_seconds,
+        awaiting_check_in,
+        awaiting_check_in_step,
+    })
 }
 
 #[tauri::command]

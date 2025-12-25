@@ -86,3 +86,21 @@ bun run e2e
 * **フルセット（マージ前推奨）:** `bun run ci && bun run build && bun run e2e`
 
 ---
+
+## 3. UIスクリーンショット取得（Tauri）
+
+UIの見た目確認用スクリーンショットは、以下のコマンドで取得できます。
+
+```bash
+bun run e2e:snapshots
+```
+
+注意:
+- macOSは`@crabnebula/tauri-driver`が必要（`CN_API_KEY`設定が必要な場合あり）
+- テスト用データは`.tauri-test-data`に投入されます
+- 旧Playwright版は `bun run e2e:snapshots:web`
+
+出力先:
+- `test-results/ui/Timer.png`
+- `test-results/ui/Edit.png`（スクロール込みで全体取得）
+- `test-results/ui/Stats.png`

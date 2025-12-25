@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import { CheckInDialog } from "./components/CheckInDialog";
 import { CheckInPrompt } from "./components/CheckInPrompt";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ErrorNoticeToast } from "./components/ErrorNoticeToast";
 import { RoutineEditor } from "./components/RoutineEditor";
 import { StatsView } from "./components/StatsView";
@@ -44,11 +45,17 @@ const AppContent = () => {
   const errorTimeoutRef = useRef<number | null>(null);
   const [fallbackNotice, setFallbackNotice] =
     useState<NotificationFallback | null>(null);
+  const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
   const checkInKey = checkInConfig
     ? `${checkInConfig.mode}:${checkInStep?.id ?? "unknown"}`
     : null;
   const checkInTitle = checkInConfig?.promptTitle?.trim() || "メモした？";
   const checkInBody = checkInConfig?.promptBody?.trim();
+  const viewOptions = [
+    { id: "timer", label: "Timer", shortcut: "⌘1" },
+    { id: "editor", label: "Edit", shortcut: "⌘2" },
+    { id: "stats", label: "Stats", shortcut: "⌘3" },
+  ] as const;
 
   const startRoutine = useCallback(async () => {
     if (!activeRoutine || activeRoutine.steps.length === 0) {
@@ -93,6 +100,22 @@ const AppContent = () => {
     }
   }, []);
 
+  const requestStopConfirm = useCallback(() => {
+    if (!state.timerState.isRunning) {
+      return;
+    }
+    setStopConfirmOpen(true);
+  }, [state.timerState.isRunning]);
+
+  const confirmStop = useCallback(async () => {
+    setStopConfirmOpen(false);
+    await stopTimer();
+  }, [stopTimer]);
+
+  const cancelStop = useCallback(() => {
+    setStopConfirmOpen(false);
+  }, []);
+
   const reloadAppState = useCallback(async () => {
     try {
       const [timerState, routines, settings] = await Promise.all([
@@ -124,6 +147,54 @@ const AppContent = () => {
     },
     [dispatch],
   );
+
+  const selectView = useCallback(
+    (view: (typeof viewOptions)[number]["id"]) => {
+      dispatch({ type: "set-current-view", view });
+    },
+    [dispatch],
+  );
+
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+      const tagName = target.tagName.toLowerCase();
+      if (["input", "textarea", "select"].includes(tagName)) {
+        return true;
+      }
+      return target.isContentEditable;
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+      if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+        return;
+      }
+      const nextView =
+        event.key === "1"
+          ? "timer"
+          : event.key === "2"
+            ? "editor"
+            : event.key === "3"
+              ? "stats"
+              : null;
+      if (!nextView) {
+        return;
+      }
+      event.preventDefault();
+      dispatch({ type: "set-current-view", view: nextView });
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [dispatch]);
 
   const scheduleFallbackClear = useCallback((id: string) => {
     if (fallbackTimeoutRef.current !== null) {
@@ -310,10 +381,17 @@ const AppContent = () => {
     }, timeout);
   }, [dispatch, state.appError]);
 
+  useEffect(() => {
+    if (!state.timerState.isRunning && stopConfirmOpen) {
+      setStopConfirmOpen(false);
+    }
+  }, [state.timerState.isRunning, stopConfirmOpen]);
+
   useTimerShortcuts(
     {
       enabled: state.currentView === "timer",
-      blocked: state.timerState.awaitingCheckIn?.mode === "gate",
+      blocked:
+        state.timerState.awaitingCheckIn?.mode === "gate" || stopConfirmOpen,
       isRunning: state.timerState.isRunning,
       isPaused: state.timerState.isPaused,
       canStart,
@@ -348,14 +426,41 @@ const AppContent = () => {
         onPause={pauseTimer}
         onResume={resumeTimer}
         onSkip={skipStep}
-        onStop={stopTimer}
+        onStop={requestStopConfirm}
       />
     );
   }
 
   return (
     <main className="app">
-      <div className="app__content">{content}</div>
+      <div className="app__content">
+        <header className="app__header">
+          <p className="app__title">McCall</p>
+          <nav className="view-switcher" aria-label="画面切替">
+            {viewOptions.map((view) => {
+              const isActive = state.currentView === view.id;
+              return (
+                <button
+                  key={view.id}
+                  className={`view-switcher__button${
+                    isActive ? " view-switcher__button--active" : ""
+                  }`}
+                  type="button"
+                  onClick={() => selectView(view.id)}
+                  aria-current={isActive ? "page" : undefined}
+                  aria-keyshortcuts={`Meta+${view.shortcut.slice(-1)}`}
+                  title={view.shortcut}
+                >
+                  {view.label}
+                </button>
+              );
+            })}
+          </nav>
+        </header>
+        <div className={`app__main app__main--${state.currentView}`}>
+          {content}
+        </div>
+      </div>
       <CheckInDialog
         open={checkInConfig?.mode === "gate"}
         title={checkInTitle}
@@ -369,6 +474,15 @@ const AppContent = () => {
         body={checkInBody}
         onDone={() => respondToCheckIn("done")}
         onSkip={() => respondToCheckIn("skip")}
+      />
+      <ConfirmDialog
+        open={stopConfirmOpen}
+        title="セッションを終了しますか？"
+        body="停止するとタイマーが終了します。"
+        confirmLabel="Stop"
+        cancelLabel="Cancel"
+        onConfirm={confirmStop}
+        onCancel={cancelStop}
       />
       <ErrorNoticeToast
         open={Boolean(state.appError)}

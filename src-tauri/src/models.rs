@@ -113,6 +113,7 @@ pub struct TimerState {
     pub current_step_index: u32,
     pub remaining_seconds: u32,
     pub awaiting_check_in: Option<CheckInConfig>,
+    pub awaiting_check_in_step: Option<Step>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

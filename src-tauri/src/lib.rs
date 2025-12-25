@@ -30,14 +30,18 @@ use crate::session_tracker::SessionTracker;
 use crate::sound_actions::{build_sound_context, play_sound_for_event};
 use crate::timer_engine::{AdvanceResult, TimerEngine, TimerError};
 use chrono::Utc;
+use std::env;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .setup(|app| {
-            let data_dir = app.path().app_data_dir()?;
+            let data_dir = env::var("MCCALL_DATA_DIR")
+                .map(PathBuf::from)
+                .unwrap_or(app.path().app_data_dir()?);
             let data_manager = data_manager::DataManager::new(data_dir)?;
             if let Err(err) = session_recovery::recover_aborted_session(&data_manager) {
                 eprintln!("Failed to recover session: {err}");
@@ -57,7 +61,12 @@ pub fn run() {
         })
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_notification::init());
+
+    #[cfg(debug_assertions)]
+    let builder = builder.plugin(tauri_plugin_automation::init());
+
+    builder
         .invoke_handler(tauri::generate_handler![
             commands::start_routine,
             commands::pause_timer,
