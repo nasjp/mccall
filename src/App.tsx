@@ -1,13 +1,27 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useRef } from "react";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import { CheckInDialog } from "./components/CheckInDialog";
 import { CheckInPrompt } from "./components/CheckInPrompt";
 import { RoutineEditor } from "./components/RoutineEditor";
+import { StepNotificationToast } from "./components/StepNotificationToast";
 import { TimerView } from "./components/TimerView";
 import { useTimerShortcuts } from "./hooks/useTimerShortcuts";
 import { AppStateProvider, useAppState } from "./state/appState";
-import type { CheckInChoice, Routine } from "./types/mccall";
+import type { CheckInChoice, Routine, Step } from "./types/mccall";
+
+type NotificationFallback = {
+  id: string;
+  title: string;
+  body?: string;
+};
+
+type NotificationPermission = "unknown" | "granted" | "denied";
 
 const AppContent = () => {
   const { state, dispatch } = useAppState();
@@ -16,6 +30,11 @@ const AppContent = () => {
   const checkInConfig = state.timerState.awaitingCheckIn;
   const checkInStep = state.timerState.awaitingCheckInStep;
   const checkInStartRef = useRef<number | null>(null);
+  const lastNotifiedStepIdRef = useRef<string | null>(null);
+  const notificationPermissionRef = useRef<NotificationPermission>("unknown");
+  const fallbackTimeoutRef = useRef<number | null>(null);
+  const [fallbackNotice, setFallbackNotice] =
+    useState<NotificationFallback | null>(null);
   const checkInKey = checkInConfig
     ? `${checkInConfig.mode}:${checkInStep?.id ?? "unknown"}`
     : null;
@@ -84,6 +103,76 @@ const AppContent = () => {
     [dispatch],
   );
 
+  const scheduleFallbackClear = useCallback((id: string) => {
+    if (fallbackTimeoutRef.current !== null) {
+      window.clearTimeout(fallbackTimeoutRef.current);
+    }
+    fallbackTimeoutRef.current = window.setTimeout(() => {
+      setFallbackNotice((current) => (current?.id === id ? null : current));
+    }, 3500);
+  }, []);
+
+  const showFallbackNotice = useCallback(
+    (title: string, body?: string) => {
+      const id = `notice-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      setFallbackNotice({ id, title, body });
+      scheduleFallbackClear(id);
+    },
+    [scheduleFallbackClear],
+  );
+
+  const ensureNotificationPermission = useCallback(async () => {
+    if (notificationPermissionRef.current === "granted") {
+      return true;
+    }
+    if (notificationPermissionRef.current === "denied") {
+      return false;
+    }
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      notificationPermissionRef.current = "denied";
+      return false;
+    }
+    if (window.Notification.permission === "denied") {
+      notificationPermissionRef.current = "denied";
+      return false;
+    }
+    try {
+      const granted = await isPermissionGranted();
+      if (granted) {
+        notificationPermissionRef.current = "granted";
+        return true;
+      }
+      const permission = await requestPermission();
+      const allowed = permission === "granted";
+      notificationPermissionRef.current = allowed ? "granted" : "denied";
+      return allowed;
+    } catch (error) {
+      console.warn("Notification permission check failed", error);
+      notificationPermissionRef.current = "denied";
+      return false;
+    }
+  }, []);
+
+  const notifyStepChange = useCallback(
+    async (step: Step) => {
+      const title = step.label?.trim() || "次のステップ";
+      const trimmed = step.instruction?.trim();
+      const body = trimmed && trimmed.length > 0 ? trimmed : undefined;
+      const allowed = await ensureNotificationPermission();
+      if (!allowed) {
+        showFallbackNotice(title, body);
+        return;
+      }
+      try {
+        await sendNotification({ title, body });
+      } catch (error) {
+        console.warn("Failed to send notification", error);
+        showFallbackNotice(title, body);
+      }
+    },
+    [ensureNotificationPermission, showFallbackNotice],
+  );
+
   useEffect(() => {
     if (checkInKey) {
       checkInStartRef.current = performance.now();
@@ -123,6 +212,46 @@ const AppContent = () => {
     },
     [checkInConfig, checkInStep?.id, dispatch],
   );
+
+  useEffect(() => {
+    if (!state.timerState.isRunning) {
+      lastNotifiedStepIdRef.current = null;
+      return;
+    }
+
+    const step = activeRoutine?.steps[state.timerState.currentStepIndex];
+    if (!step) {
+      return;
+    }
+
+    if (lastNotifiedStepIdRef.current === step.id) {
+      return;
+    }
+
+    lastNotifiedStepIdRef.current = step.id;
+
+    const notificationsEnabled =
+      state.settings.notificationsEnabled && activeRoutine?.notifications;
+    if (!notificationsEnabled) {
+      return;
+    }
+
+    void notifyStepChange(step);
+  }, [
+    activeRoutine,
+    notifyStepChange,
+    state.settings.notificationsEnabled,
+    state.timerState.currentStepIndex,
+    state.timerState.isRunning,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (fallbackTimeoutRef.current !== null) {
+        window.clearTimeout(fallbackTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useTimerShortcuts(
     {
@@ -188,6 +317,11 @@ const AppContent = () => {
         body={checkInBody}
         onDone={() => respondToCheckIn("done")}
         onSkip={() => respondToCheckIn("skip")}
+      />
+      <StepNotificationToast
+        open={Boolean(fallbackNotice)}
+        title={fallbackNotice?.title ?? ""}
+        body={fallbackNotice?.body}
       />
     </main>
   );
