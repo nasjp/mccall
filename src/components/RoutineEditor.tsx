@@ -4,6 +4,7 @@ import type {
   RepeatMode,
   Routine,
   SoundOverride,
+  SoundScheme,
   SoundSetting,
   Step,
 } from "../types/mccall";
@@ -445,6 +446,47 @@ export const RoutineEditor = ({
                 <option value="off">off</option>
               </select>
             </div>
+            <div className="routine-editor__form">
+              <label
+                className="routine-editor__label"
+                htmlFor="routine-sound-scheme"
+              >
+                サウンド方式
+              </label>
+              <select
+                id="routine-sound-scheme"
+                className="routine-editor__select"
+                value={activeRoutine.soundScheme}
+                onChange={(event) =>
+                  updateRoutine({
+                    soundScheme: event.currentTarget.value as SoundScheme,
+                  })
+                }
+              >
+                <option value="default">デフォルト</option>
+                <option value="endDifferent">終端のみ別</option>
+              </select>
+            </div>
+            <label className="routine-editor__toggle">
+              <input
+                type="checkbox"
+                checked={activeRoutine.autoAdvance}
+                onChange={(event) =>
+                  updateRoutine({ autoAdvance: event.currentTarget.checked })
+                }
+              />
+              自動で次へ進む
+            </label>
+            <label className="routine-editor__toggle">
+              <input
+                type="checkbox"
+                checked={activeRoutine.notifications}
+                onChange={(event) =>
+                  updateRoutine({ notifications: event.currentTarget.checked })
+                }
+              />
+              ステップ切替通知
+            </label>
             <div className="routine-editor__steps-grid">
               <div className="routine-editor__steps-panel">
                 <div className="routine-editor__steps-header">

@@ -89,6 +89,38 @@ describe("RoutineEditor", () => {
     expect(onSelectRoutine).toHaveBeenCalledWith(created.id);
   });
 
+  test("updates routine-level settings", async () => {
+    const user = userEvent.setup();
+    const onUpsertRoutine = vi.fn();
+    const routine = buildRoutine();
+
+    render(
+      <RoutineEditor
+        routines={[routine]}
+        currentRoutine={routine}
+        onUpsertRoutine={onUpsertRoutine}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("自動で次へ進む"));
+    let lastCall =
+      onUpsertRoutine.mock.calls[onUpsertRoutine.mock.calls.length - 1][0];
+    expect(lastCall.autoAdvance).toBe(false);
+
+    await user.click(screen.getByLabelText("ステップ切替通知"));
+    lastCall =
+      onUpsertRoutine.mock.calls[onUpsertRoutine.mock.calls.length - 1][0];
+    expect(lastCall.notifications).toBe(false);
+
+    await user.selectOptions(
+      screen.getByLabelText("サウンド方式"),
+      "endDifferent",
+    );
+    lastCall =
+      onUpsertRoutine.mock.calls[onUpsertRoutine.mock.calls.length - 1][0];
+    expect(lastCall.soundScheme).toBe("endDifferent");
+  });
+
   test("adds steps to the routine", async () => {
     const user = userEvent.setup();
     const onUpsertRoutine = vi.fn();

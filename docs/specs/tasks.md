@@ -120,7 +120,7 @@
     - サウンド設定（inherit/on/off）、集計設定（countAsBreak）、Check-in設定の編集を実装
     - _要件: 1.2, 4.2, 5.2, 5.3, 3.1, 3.2, 3.3_
 
-  - [ ] 9.3 ルーチン全体設定の不足UIを追加（未着手）
+  - [x] 9.3 ルーチン全体設定の不足UIを追加（Done）
     - autoAdvance / notifications / soundScheme の編集UI
     - _要件: 1.1, 2.2, 4.1_
 
