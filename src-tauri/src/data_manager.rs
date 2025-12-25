@@ -1,4 +1,7 @@
-use crate::models::{Routine, Session};
+use crate::models::{
+    CheckInConfig, CheckInMode, RepeatMode, Routine, Session, SoundOverride, SoundScheme,
+    SoundSetting, Step,
+};
 use chrono::DateTime;
 use serde::Serialize;
 use std::fs;
@@ -72,6 +75,12 @@ impl DataManager {
         }
         if !manager.sessions_path.exists() {
             manager.write_json(&manager.sessions_path, &Vec::<Session>::new())?;
+        }
+
+        let routines = manager.load_routines()?;
+        if routines.is_empty() {
+            let template = default_template_routine();
+            manager.save_routines(&[template])?;
         }
 
         Ok(manager)
@@ -186,10 +195,111 @@ impl DataManager {
     }
 }
 
+fn default_template_routine() -> Routine {
+    Routine {
+        id: "routine-template-10min".to_string(),
+        name: "10分ミニ・スプリント".to_string(),
+        steps: vec![
+            template_step(
+                "step-template-1",
+                0,
+                "タスク1行",
+                20,
+                "",
+                false,
+                check_in_off(),
+            ),
+            template_step(
+                "step-template-2",
+                1,
+                "完了条件",
+                20,
+                "",
+                false,
+                check_in_off(),
+            ),
+            template_step(
+                "step-template-3",
+                2,
+                "環境整備",
+                20,
+                "",
+                false,
+                check_in_off(),
+            ),
+            template_step("step-template-4", 3, "集中", 240, "", false, check_in_off()),
+            template_step("step-template-5", 4, "停止", 10, "", false, check_in_off()),
+            template_step(
+                "step-template-6",
+                5,
+                "メモ",
+                110,
+                "障害/次の1手/気づき",
+                false,
+                check_in_gate("メモした？"),
+            ),
+            template_step("step-template-7", 6, "回復", 90, "", true, check_in_off()),
+            template_step(
+                "step-template-8",
+                7,
+                "次の着火準備",
+                90,
+                "",
+                false,
+                check_in_off(),
+            ),
+        ],
+        repeat_mode: RepeatMode::Infinite,
+        auto_advance: true,
+        notifications: true,
+        sound_default: SoundSetting::On,
+        sound_scheme: SoundScheme::Default,
+    }
+}
+
+fn check_in_off() -> CheckInConfig {
+    CheckInConfig {
+        mode: CheckInMode::Off,
+        prompt_title: None,
+        prompt_body: None,
+        prompt_timeout_seconds: None,
+    }
+}
+
+fn check_in_gate(title: &str) -> CheckInConfig {
+    CheckInConfig {
+        mode: CheckInMode::Gate,
+        prompt_title: Some(title.to_string()),
+        prompt_body: None,
+        prompt_timeout_seconds: None,
+    }
+}
+
+fn template_step(
+    id: &str,
+    order: u32,
+    label: &str,
+    duration_seconds: u32,
+    instruction: &str,
+    count_as_break: bool,
+    check_in: CheckInConfig,
+) -> Step {
+    Step {
+        id: id.to_string(),
+        order,
+        label: label.to_string(),
+        duration_seconds,
+        instruction: instruction.to_string(),
+        sound_override: SoundOverride::Inherit,
+        count_as_break,
+        check_in,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{DataError, DataManager};
-    use crate::models::{Session, SessionTotals};
+    use crate::models::{CheckInMode, Session, SessionTotals};
     use std::fs;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -247,6 +357,38 @@ mod tests {
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].id, session.id);
         assert_eq!(loaded[0].started_at, session.started_at);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn seeds_default_template_on_first_run() {
+        let dir = temp_dir();
+        let manager = DataManager::new(&dir).expect("create manager");
+
+        let routines = manager.load_routines().expect("load routines");
+        assert_eq!(routines.len(), 1);
+        let routine = &routines[0];
+        assert_eq!(routine.name, "10分ミニ・スプリント");
+        assert_eq!(routine.steps.len(), 8);
+
+        let memo_step = routine
+            .steps
+            .iter()
+            .find(|step| step.label == "メモ")
+            .expect("memo step");
+        assert_eq!(memo_step.check_in.mode, CheckInMode::Gate);
+        assert_eq!(
+            memo_step.check_in.prompt_title.as_deref(),
+            Some("メモした？")
+        );
+
+        let recovery_step = routine
+            .steps
+            .iter()
+            .find(|step| step.label == "回復")
+            .expect("recovery step");
+        assert!(recovery_step.count_as_break);
 
         let _ = fs::remove_dir_all(&dir);
     }

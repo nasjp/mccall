@@ -272,6 +272,11 @@ body {
   justify-content: space-between;
 }
 
+.routine-editor__header-actions {
+  display: flex;
+  gap: var(--space-8);
+}
+
 .routine-editor__list {
   display: grid;
   gap: var(--space-8);

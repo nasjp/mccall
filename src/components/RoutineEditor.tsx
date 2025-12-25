@@ -57,6 +57,22 @@ const createRoutine = (): Routine => ({
   soundScheme: "default",
 });
 
+const duplicateRoutine = (routine: Routine): Routine => {
+  const baseName = routine.name.trim();
+  const name = baseName.length > 0 ? `${baseName}（コピー）` : "コピー";
+  return {
+    ...routine,
+    id: createId(),
+    name,
+    steps: routine.steps.map((step, index) => ({
+      ...step,
+      id: createId(),
+      order: index,
+      checkIn: { ...step.checkIn },
+    })),
+  };
+};
+
 const normalizeSteps = (steps: Step[]) =>
   steps.map((step, index) => ({
     ...step,
@@ -128,6 +144,16 @@ export const RoutineEditor = ({
     const routine = createRoutine();
     commitRoutine(routine);
     onSelectRoutine?.(routine.id);
+  };
+
+  const handleDuplicateRoutine = () => {
+    if (!activeRoutine) {
+      return;
+    }
+    const routine = duplicateRoutine(activeRoutine);
+    commitRoutine(routine);
+    onSelectRoutine?.(routine.id);
+    setSelectedStepId(routine.steps[0]?.id ?? null);
   };
 
   const handleAddStep = () => {
@@ -254,13 +280,23 @@ export const RoutineEditor = ({
       <div className="panel routine-editor__panel">
         <div className="routine-editor__header">
           <h2 className="section-title">Routines</h2>
-          <button
-            className="button button--compact"
-            type="button"
-            onClick={handleCreateRoutine}
-          >
-            新規ルーチン
-          </button>
+          <div className="routine-editor__header-actions">
+            <button
+              className="button button--compact"
+              type="button"
+              onClick={handleCreateRoutine}
+            >
+              新規ルーチン
+            </button>
+            <button
+              className="button button--compact"
+              type="button"
+              onClick={handleDuplicateRoutine}
+              disabled={!activeRoutine}
+            >
+              複製
+            </button>
+          </div>
         </div>
         <ul className="routine-editor__list">
           {routines.length === 0 ? (

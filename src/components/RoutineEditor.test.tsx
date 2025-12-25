@@ -51,6 +51,7 @@ describe("RoutineEditor", () => {
     expect(
       screen.getByRole("button", { name: "新規ルーチン" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "複製" })).toBeDisabled();
   });
 
   test("renders routine list and details", () => {
@@ -106,5 +107,31 @@ describe("RoutineEditor", () => {
     const lastCall =
       onUpsertRoutine.mock.calls[onUpsertRoutine.mock.calls.length - 1][0];
     expect(lastCall.steps).toHaveLength(3);
+  });
+
+  test("duplicates the selected routine", async () => {
+    const user = userEvent.setup();
+    const onUpsertRoutine = vi.fn();
+    const onSelectRoutine = vi.fn();
+    const routine = buildRoutine();
+
+    render(
+      <RoutineEditor
+        routines={[routine]}
+        currentRoutine={routine}
+        onUpsertRoutine={onUpsertRoutine}
+        onSelectRoutine={onSelectRoutine}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "複製" }));
+
+    expect(onUpsertRoutine).toHaveBeenCalledTimes(1);
+    const duplicated = onUpsertRoutine.mock.calls[0][0] as Routine;
+    expect(duplicated.id).not.toBe(routine.id);
+    expect(duplicated.name).toBe("朝のルーチン（コピー）");
+    expect(duplicated.steps).toHaveLength(routine.steps.length);
+    expect(duplicated.steps[0].id).not.toBe(routine.steps[0].id);
+    expect(onSelectRoutine).toHaveBeenCalledWith(duplicated.id);
   });
 });
