@@ -23,7 +23,7 @@ use crate::app_error::AppError;
 use crate::audio_manager::SoundEvent;
 use crate::events::{
     emit_app_error, emit_check_in_required, emit_check_in_timeout, emit_step_changed,
-    emit_timer_stopped, emit_timer_tick,
+    emit_timer_paused, emit_timer_stopped, emit_timer_tick,
 };
 use crate::models::StepRunResult;
 use crate::session_tracker::SessionTracker;
@@ -130,6 +130,8 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
             .take_check_in_timeout()
             .and_then(|step_index| engine.step_at(step_index).map(|step| step.id.clone()));
 
+        let auto_pause_event = engine.take_auto_pause_event();
+
         let tick_payload = engine.remaining_time().ok().and_then(|remaining| {
             engine.current_step().map(|step| {
                 (
@@ -153,6 +155,9 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
         if let Some(data_manager) = app_handle.try_state::<data_manager::DataManager>() {
             if let Some((step, _)) = step_changed.as_ref() {
                 let _ = session_recovery::update_active_step(&data_manager, step);
+            }
+            if auto_pause_event {
+                let _ = session_recovery::mark_paused(&data_manager);
             }
             if routine_completed {
                 let _ = session_recovery::clear_active_session(&data_manager);
@@ -242,6 +247,9 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
         }
         if let Some((step, step_index)) = step_changed {
             emit_step_changed(&app_handle, step, step_index);
+        }
+        if auto_pause_event {
+            emit_timer_paused(&app_handle);
         }
         if let Some((check_in, step, _blocking)) = check_in_required {
             emit_check_in_required(&app_handle, check_in, step);

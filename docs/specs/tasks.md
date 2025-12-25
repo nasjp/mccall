@@ -35,14 +35,12 @@
     - リピートモード（infinite/count/duration）の処理を実装
     - _要件: 2.2, 2.6_
 
-  - [ ] 3.3 Check-in機能の実装（未完了）
+- [x] 3.3 Check-in機能の実装（Done）
     - off/prompt/gateの3モードでのCheck-in処理を実装
     - タイムアウト処理とレスポンス記録機能を実装
-    - 不足: respondedAt/responseTimeMs/stepId をバックエンドで未使用（記録されない）
-    - 不足: Session/StepRunへのCheck-in結果の保存が未実装
     - _要件: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-  - [ ] 3.4 autoAdvance=false の挙動実装（未着手）
+  - [x] 3.4 autoAdvance=false の挙動実装（Done）
     - 自動遷移しない場合の停止/待機UI挙動を定義し実装
     - _要件: 2.2_
 

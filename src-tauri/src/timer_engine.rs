@@ -54,6 +54,7 @@ pub struct TimerEngine {
     pending_check_in: Option<PendingCheckIn>,
     pending_check_in_event: Option<CheckInEvent>,
     pending_check_in_timeout: Option<usize>,
+    auto_pause_event: bool,
     last_check_in: Option<CheckInResult>,
 }
 
@@ -112,6 +113,7 @@ impl TimerEngine {
         self.pending_check_in = None;
         self.pending_check_in_event = None;
         self.pending_check_in_timeout = None;
+        self.auto_pause_event = false;
         self.last_check_in = None;
         self.routine = Some(routine);
         Ok(())
@@ -154,6 +156,7 @@ impl TimerEngine {
         self.pending_check_in = None;
         self.pending_check_in_event = None;
         self.pending_check_in_timeout = None;
+        self.auto_pause_event = false;
         self.last_check_in = None;
         Ok(())
     }
@@ -204,7 +207,10 @@ impl TimerEngine {
 
     pub fn respond_to_check_in(
         &mut self,
+        step_id: &str,
         choice: CheckInChoice,
+        responded_at: Option<String>,
+        response_time_ms: Option<u64>,
     ) -> Result<AdvanceResult, TimerError> {
         if !self.is_running() {
             return Err(TimerError::NotRunning);
@@ -212,14 +218,28 @@ impl TimerEngine {
         let pending = self.pending_check_in.take().ok_or_else(|| {
             TimerError::InvalidRoutine("no check-in awaiting response".to_string())
         })?;
-        let response_time_ms = Instant::now()
-            .duration_since(pending.requested_at)
-            .as_millis() as u64;
+        let expected_step_id = self
+            .step_at(pending.step_index)
+            .map(|step| step.id.as_str())
+            .ok_or_else(|| TimerError::InvalidRoutine("step index out of bounds".to_string()))?;
+        if expected_step_id != step_id {
+            self.pending_check_in = Some(pending);
+            return Err(TimerError::InvalidRoutine(
+                "check-in step mismatch".to_string(),
+            ));
+        }
+        let response_time_ms = response_time_ms.or_else(|| {
+            Some(
+                Instant::now()
+                    .duration_since(pending.requested_at)
+                    .as_millis() as u64,
+            )
+        });
         let result = CheckInResult {
             mode: pending.mode,
-            responded_at: None,
+            responded_at,
             choice: Some(choice),
-            response_time_ms: Some(response_time_ms),
+            response_time_ms,
             timed_out: false,
         };
         self.last_check_in = Some(result);
@@ -228,7 +248,9 @@ impl TimerEngine {
         match pending.mode {
             CheckInMode::Gate => {
                 let now = Instant::now();
-                self.advance_from_index(pending.step_index, Duration::ZERO, now)
+                let result = self.advance_from_index(pending.step_index, Duration::ZERO, now)?;
+                self.maybe_pause_after_advance(&result, now);
+                Ok(result)
             }
             CheckInMode::Prompt | CheckInMode::Off => Ok(AdvanceResult::NoChange),
         }
@@ -240,13 +262,23 @@ impl TimerEngine {
         }
         if let Some(pending) = &self.pending_check_in {
             if pending.mode == CheckInMode::Gate && pending.step_index == self.current_step_index {
-                return self.respond_to_check_in(CheckInChoice::Skip);
+                let step_id = self
+                    .step_at(pending.step_index)
+                    .map(|step| step.id.clone())
+                    .ok_or_else(|| {
+                        TimerError::InvalidRoutine("step index out of bounds".to_string())
+                    })?;
+                return self.respond_to_check_in(&step_id, CheckInChoice::Skip, None, None);
             }
         }
         let paused_at = self.paused_at;
+        let was_paused = paused_at.is_some();
         let now = paused_at.unwrap_or_else(Instant::now);
         let result = self.advance_from_index(self.current_step_index, Duration::ZERO, now)?;
-        if paused_at.is_some() {
+        if !was_paused {
+            self.maybe_pause_after_advance(&result, now);
+        }
+        if was_paused {
             self.paused_at = paused_at;
         }
         Ok(result)
@@ -268,6 +300,15 @@ impl TimerEngine {
 
     pub fn take_check_in_timeout(&mut self) -> Option<usize> {
         self.pending_check_in_timeout.take()
+    }
+
+    pub fn take_auto_pause_event(&mut self) -> bool {
+        if self.auto_pause_event {
+            self.auto_pause_event = false;
+            true
+        } else {
+            false
+        }
     }
 
     fn validate_routine(routine: &Routine) -> Result<(), TimerError> {
@@ -327,6 +368,28 @@ impl TimerEngine {
 
     fn effective_now(&self) -> Instant {
         self.paused_at.unwrap_or_else(Instant::now)
+    }
+
+    fn should_auto_pause(&self) -> bool {
+        self.routine
+            .as_ref()
+            .map(|routine| !routine.auto_advance)
+            .unwrap_or(false)
+    }
+
+    fn maybe_pause_after_advance(&mut self, result: &AdvanceResult, now: Instant) {
+        if !matches!(result, AdvanceResult::StepAdvanced { .. }) {
+            return;
+        }
+        self.apply_auto_pause_if_needed(now);
+    }
+
+    fn apply_auto_pause_if_needed(&mut self, now: Instant) {
+        if self.is_paused() || !self.should_auto_pause() {
+            return;
+        }
+        self.paused_at = Some(now);
+        self.auto_pause_event = true;
     }
 
     fn advance_from_index(
@@ -417,7 +480,14 @@ impl TimerEngine {
                     config,
                     blocking: false,
                 });
-                return self.advance_from_index(step_index, overflow, now);
+                let overflow = if self.should_auto_pause() {
+                    Duration::ZERO
+                } else {
+                    overflow
+                };
+                let result = self.advance_from_index(step_index, overflow, now)?;
+                self.maybe_pause_after_advance(&result, now);
+                return Ok(result);
             }
             self.pending_check_in = Some(PendingCheckIn {
                 mode: config.mode,
@@ -432,7 +502,14 @@ impl TimerEngine {
             });
             return Ok(AdvanceResult::NoChange);
         }
-        self.advance_from_index(step_index, overflow, now)
+        let overflow = if self.should_auto_pause() {
+            Duration::ZERO
+        } else {
+            overflow
+        };
+        let result = self.advance_from_index(step_index, overflow, now)?;
+        self.maybe_pause_after_advance(&result, now);
+        Ok(result)
     }
 
     fn replace_prompt_pending(
@@ -690,7 +767,7 @@ mod tests {
         assert!(matches!(event.config.mode, CheckInMode::Gate));
 
         let result = engine
-            .respond_to_check_in(CheckInChoice::Done)
+            .respond_to_check_in("step-1", CheckInChoice::Done, None, None)
             .expect("respond");
         assert!(matches!(
             result,
@@ -725,7 +802,7 @@ mod tests {
         assert!(matches!(event.config.mode, CheckInMode::Prompt));
 
         let result = engine
-            .respond_to_check_in(CheckInChoice::Skip)
+            .respond_to_check_in("step-1", CheckInChoice::Skip, None, None)
             .expect("respond");
         assert!(matches!(result, AdvanceResult::NoChange));
         let last = engine.last_check_in_result().expect("last check-in");
@@ -789,6 +866,28 @@ mod tests {
             AdvanceResult::StepAdvanced { step_index: 1 }
         ));
         assert!(engine.is_paused());
+    }
+
+    #[test]
+    fn auto_advance_false_pauses_after_step_completion() {
+        let steps = vec![sample_step("step-1", 1), sample_step("step-2", 60)];
+        let mut routine = routine_with_steps(steps, RepeatMode::Infinite);
+        routine.auto_advance = false;
+        let mut engine = TimerEngine::new();
+        engine.start_routine(routine).expect("start routine");
+
+        let now = Instant::now();
+        engine.step_started_at = Some(now - Duration::from_secs(2));
+        engine.session_started_at = Some(now - Duration::from_secs(2));
+
+        let result = engine.advance_if_needed().expect("advance");
+        assert!(matches!(
+            result,
+            AdvanceResult::StepAdvanced { step_index: 1 }
+        ));
+        assert!(engine.is_paused());
+        assert!(engine.take_auto_pause_event());
+        assert!(!engine.take_auto_pause_event());
     }
 
     #[test]
@@ -867,9 +966,38 @@ mod tests {
             .start_routine(sample_routine(60))
             .expect("start routine");
         let err = engine
-            .respond_to_check_in(CheckInChoice::Done)
+            .respond_to_check_in("step-1", CheckInChoice::Done, None, None)
             .expect_err("should fail");
         assert!(matches!(err, TimerError::InvalidRoutine(_)));
+    }
+
+    #[test]
+    fn respond_to_check_in_rejects_mismatched_step() {
+        let mut step = sample_step("step-1", 1);
+        step.check_in.mode = CheckInMode::Gate;
+        let steps = vec![step, sample_step("step-2", 60)];
+        let routine = routine_with_steps(steps, RepeatMode::Infinite);
+        let mut engine = TimerEngine::new();
+        engine.start_routine(routine).expect("start routine");
+
+        let now = Instant::now();
+        engine.step_started_at = Some(now - Duration::from_secs(2));
+        engine.session_started_at = Some(now - Duration::from_secs(2));
+        let _ = engine.advance_if_needed().expect("advance");
+
+        let err = engine
+            .respond_to_check_in("step-2", CheckInChoice::Done, None, None)
+            .expect_err("should fail");
+        assert!(matches!(err, TimerError::InvalidRoutine(_)));
+        assert_eq!(engine.pending_check_in(), Some((CheckInMode::Gate, 0)));
+
+        let result = engine
+            .respond_to_check_in("step-1", CheckInChoice::Done, None, None)
+            .expect("respond");
+        assert!(matches!(
+            result,
+            AdvanceResult::StepAdvanced { step_index: 1 }
+        ));
     }
 
     #[test]

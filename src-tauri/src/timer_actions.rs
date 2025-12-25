@@ -159,6 +159,7 @@ pub fn skip_step(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(
     let routine_base_context = build_sound_context(&engine, None);
     let result = engine.skip_current_step().map_err(AppError::from)?;
     let (step_changed, routine_completed) = capture_advance_events(&engine, &result);
+    let auto_pause_event = engine.take_auto_pause_event();
     let step_sound_context = step_changed
         .as_ref()
         .and_then(|(step, _)| build_sound_context(&engine, Some(step)));
@@ -173,6 +174,12 @@ pub fn skip_step(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(
             session_recovery::update_active_step(&manager, step).map_err(AppError::from)?;
         }
         emit_step_changed(app, step.clone(), *step_index);
+    }
+    if auto_pause_event {
+        if let Some(manager) = app.try_state::<DataManager>() {
+            session_recovery::mark_paused(&manager).map_err(AppError::from)?;
+        }
+        emit_timer_paused(app);
     }
     if routine_completed {
         emit_timer_stopped(app);
@@ -275,9 +282,15 @@ pub fn respond_to_check_in(
     let mut engine = timer_engine.lock().map_err(|_| timer_lock_error())?;
     let routine_base_context = build_sound_context(&engine, None);
     let result = engine
-        .respond_to_check_in(response.choice)
+        .respond_to_check_in(
+            &response.step_id,
+            response.choice,
+            response.responded_at.clone(),
+            response.response_time_ms,
+        )
         .map_err(AppError::from)?;
     let (step_changed, routine_completed) = capture_advance_events(&engine, &result);
+    let auto_pause_event = engine.take_auto_pause_event();
     let step_sound_context = step_changed
         .as_ref()
         .and_then(|(step, _)| build_sound_context(&engine, Some(step)));
@@ -292,6 +305,12 @@ pub fn respond_to_check_in(
             session_recovery::update_active_step(&manager, step).map_err(AppError::from)?;
         }
         emit_step_changed(app, step.clone(), *step_index);
+    }
+    if auto_pause_event {
+        if let Some(manager) = app.try_state::<DataManager>() {
+            session_recovery::mark_paused(&manager).map_err(AppError::from)?;
+        }
+        emit_timer_paused(app);
     }
     if routine_completed {
         emit_timer_stopped(app);
