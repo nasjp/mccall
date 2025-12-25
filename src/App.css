@@ -226,6 +226,47 @@ body {
   color: GrayText;
 }
 
+.error-notice {
+  position: fixed;
+  left: 50%;
+  top: var(--space-24);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-8) var(--space-16);
+  border-radius: var(--radius-card);
+  border: 1px solid ButtonBorder;
+  background-color: Canvas;
+  color: CanvasText;
+  width: min(480px, calc(100% - var(--space-24) * 2));
+  z-index: 12;
+}
+
+.error-notice__content {
+  display: grid;
+  gap: var(--space-4);
+  flex: 1;
+}
+
+.error-notice__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.error-notice__body {
+  margin: 0;
+  font-size: 12px;
+  color: GrayText;
+}
+
+.error-notice__actions {
+  display: flex;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
 .button {
   border: 1px solid ButtonBorder;
   border-radius: var(--radius-button);

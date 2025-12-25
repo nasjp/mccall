@@ -1,3 +1,4 @@
+mod app_error;
 #[allow(dead_code)]
 mod audio_manager;
 mod events;
@@ -10,15 +11,19 @@ mod menu_bar;
 mod models;
 mod runtime_state;
 mod session_stats;
+mod sound_actions;
 mod timer_actions;
 #[allow(dead_code)]
 mod timer_engine;
 
+use crate::app_error::AppError;
+use crate::audio_manager::SoundEvent;
 use crate::events::{
-    emit_check_in_required, emit_check_in_timeout, emit_step_changed, emit_timer_stopped,
-    emit_timer_tick,
+    emit_app_error, emit_check_in_required, emit_check_in_timeout, emit_step_changed,
+    emit_timer_stopped, emit_timer_tick,
 };
-use crate::timer_engine::{AdvanceResult, TimerEngine};
+use crate::sound_actions::{build_sound_context, play_sound_for_event};
+use crate::timer_engine::{AdvanceResult, TimerEngine, TimerError};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -77,10 +82,17 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
             continue;
         }
 
+        let routine_base_context = build_sound_context(&engine, None);
         let advance_result = match engine.advance_if_needed() {
             Ok(result) => result,
             Err(err) => {
-                eprintln!("Timer advance failed: {err}");
+                let should_reset = matches!(err, TimerError::InvalidRoutine(_));
+                let app_error = AppError::from(err);
+                if should_reset {
+                    let _ = engine.stop();
+                }
+                drop(engine);
+                emit_app_error(&app_handle, app_error.payload());
                 continue;
             }
         };
@@ -114,6 +126,14 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
         });
 
         let routine_completed = matches!(advance_result, AdvanceResult::RoutineCompleted);
+        let step_sound_context = step_changed
+            .as_ref()
+            .and_then(|(step, _)| build_sound_context(&engine, Some(step)));
+        let routine_sound_context = if routine_completed {
+            routine_base_context
+        } else {
+            None
+        };
         drop(engine);
 
         if let Some((remaining_seconds, step_name)) = tick_payload {
@@ -130,6 +150,12 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
         }
         if routine_completed {
             emit_timer_stopped(&app_handle);
+        }
+        if let Some(context) = step_sound_context {
+            play_sound_for_event(&app_handle, Some(context), SoundEvent::StepTransition);
+        }
+        if let Some(context) = routine_sound_context {
+            play_sound_for_event(&app_handle, Some(context), SoundEvent::RoutineCompleted);
         }
         menu_bar::sync_menu_bar(&app_handle);
     });

@@ -192,4 +192,34 @@ describe("appReducer", () => {
     expect(nextState.timerState.awaitingCheckIn).toBeUndefined();
     expect(nextState.timerState.awaitingCheckInStep).toBeUndefined();
   });
+
+  test("app-error stores error notice", () => {
+    const nextState = appReducer(initialAppState, {
+      type: "app-error",
+      error: {
+        id: "error-1",
+        title: "データの読み込みに失敗しました",
+        kind: "data" as const,
+        action: "reload-data",
+      },
+    });
+
+    expect(nextState.appError?.id).toBe("error-1");
+    expect(nextState.appError?.kind).toBe("data");
+  });
+
+  test("clear-app-error removes error notice", () => {
+    const state = {
+      ...initialAppState,
+      appError: {
+        id: "error-1",
+        title: "タイマーエラー",
+        kind: "timer" as const,
+      },
+    };
+
+    const nextState = appReducer(state, { type: "clear-app-error" });
+
+    expect(nextState.appError).toBeUndefined();
+  });
 });

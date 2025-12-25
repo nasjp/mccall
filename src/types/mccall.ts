@@ -10,6 +10,8 @@ export type SoundScheme = "default" | "endDifferent";
 export type CheckInMode = "off" | "prompt" | "gate";
 export type CheckInChoice = "done" | "skip";
 export type StepRunResult = "completed" | "skipped" | "aborted";
+export type AppErrorKind = "system" | "data" | "timer" | "audio";
+export type AppErrorAction = "reload-data" | "reset-timer";
 
 export interface Routine {
   id: string;
@@ -112,9 +114,18 @@ export interface AppState {
   currentRoutine?: Routine;
   globalMute: boolean;
   settings: AppSettings;
+  appError?: AppErrorNotice;
 }
 
 export interface AppSettings {
   notificationsEnabled: boolean;
   soundDefault: SoundSetting;
+}
+
+export interface AppErrorNotice {
+  id: string;
+  title: string;
+  body?: string;
+  kind: AppErrorKind;
+  action?: AppErrorAction;
 }

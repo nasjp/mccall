@@ -1,5 +1,7 @@
+use crate::app_error::{AppError, AppErrorKind};
 use crate::audio_manager::AudioManager;
 use crate::data_manager::DataManager;
+use crate::events::emit_app_error;
 use crate::runtime_state::RuntimeState;
 use crate::timer_actions;
 use crate::timer_engine::TimerEngine;
@@ -138,7 +140,7 @@ fn handle_start(app: &AppHandle) {
     let routines = match data_manager.load_routines() {
         Ok(items) => items,
         Err(err) => {
-            eprintln!("Failed to load routines for menu start: {err}");
+            report_error(app, AppError::from(err));
             return;
         }
     };
@@ -156,7 +158,7 @@ fn handle_start(app: &AppHandle) {
     if let Some(routine) = routine {
         if let Err(err) = timer_actions::start_routine(routine, &timer_engine, &runtime_state, app)
         {
-            eprintln!("Failed to start routine from menu: {err}");
+            report_error(app, err);
         }
     }
 
@@ -180,7 +182,7 @@ fn handle_pause_resume(app: &AppHandle) {
     };
 
     if let Err(err) = result {
-        eprintln!("Failed to toggle pause from menu: {err}");
+        report_error(app, err);
     }
 
     sync_menu_bar(app);
@@ -189,7 +191,7 @@ fn handle_pause_resume(app: &AppHandle) {
 fn handle_skip(app: &AppHandle) {
     let timer_engine = app.state::<Mutex<TimerEngine>>();
     if let Err(err) = timer_actions::skip_step(&timer_engine, app) {
-        eprintln!("Failed to skip step from menu: {err}");
+        report_error(app, err);
     }
     sync_menu_bar(app);
 }
@@ -197,7 +199,7 @@ fn handle_skip(app: &AppHandle) {
 fn handle_stop(app: &AppHandle) {
     let timer_engine = app.state::<Mutex<TimerEngine>>();
     if let Err(err) = timer_actions::stop_timer(&timer_engine, app) {
-        eprintln!("Failed to stop timer from menu: {err}");
+        report_error(app, err);
     }
     sync_menu_bar(app);
 }
@@ -209,7 +211,14 @@ fn handle_toggle_mute(app: &AppHandle) {
             manager.toggle_global_mute();
         }
         Err(_) => {
-            eprintln!("Audio state lock failed while toggling mute");
+            report_error(
+                app,
+                AppError::new(
+                    AppErrorKind::System,
+                    "サウンド状態の取得に失敗しました",
+                    true,
+                ),
+            );
             return;
         }
     }
@@ -322,6 +331,15 @@ fn truncate_label(label: &str, max_chars: usize) -> String {
     let keep = max_chars.saturating_sub(3);
     let truncated: String = label.chars().take(keep).collect();
     format!("{truncated}...")
+}
+
+fn report_error(app: &AppHandle, error: AppError) {
+    emit_app_error(app, error.payload());
+    if let Some(detail) = error.detail() {
+        eprintln!("Menu bar error ({:?}): {detail}", error.kind());
+    } else {
+        eprintln!("Menu bar error ({:?}): {}", error.kind(), error.message());
+    }
 }
 
 #[cfg(test)]

@@ -1,3 +1,4 @@
+use crate::app_error::AppErrorPayload;
 use crate::models::{CheckInConfig, Step};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
@@ -9,6 +10,7 @@ const CHECK_IN_TIMEOUT_EVENT: &str = "check-in-timeout";
 const TIMER_PAUSED_EVENT: &str = "timer-paused";
 const TIMER_RESUMED_EVENT: &str = "timer-resumed";
 const TIMER_STOPPED_EVENT: &str = "timer-stopped";
+const APP_ERROR_EVENT: &str = "app-error";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -88,4 +90,8 @@ pub fn emit_timer_resumed(app: &AppHandle) {
 
 pub fn emit_timer_stopped(app: &AppHandle) {
     emit_event(app, TIMER_STOPPED_EVENT, ());
+}
+
+pub fn emit_app_error(app: &AppHandle, payload: AppErrorPayload) {
+    emit_event(app, APP_ERROR_EVENT, payload);
 }

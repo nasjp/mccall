@@ -10,6 +10,9 @@ import {
   useReducer,
 } from "react";
 import type {
+  AppErrorAction,
+  AppErrorKind,
+  AppErrorNotice,
   AppSettings,
   AppState,
   CheckInConfig,
@@ -39,6 +42,7 @@ export const initialAppState: AppState = {
   currentRoutine: undefined,
   globalMute: false,
   settings: defaultSettings,
+  appError: undefined,
 };
 
 type TimerTickPayload = {
@@ -60,6 +64,13 @@ type CheckInTimeoutPayload = {
   stepId: string;
 };
 
+type AppErrorPayload = {
+  kind: AppErrorKind;
+  message: string;
+  detail?: string;
+  recoverable: boolean;
+};
+
 type AppAction =
   | { type: "initialize"; timerState: TimerState; routines: Routine[] }
   | { type: "set-current-view"; view: AppState["currentView"] }
@@ -72,7 +83,9 @@ type AppAction =
   | { type: "check-in-cleared" }
   | { type: "timer-paused" }
   | { type: "timer-resumed" }
-  | { type: "timer-stopped" };
+  | { type: "timer-stopped" }
+  | { type: "app-error"; error: AppErrorNotice }
+  | { type: "clear-app-error" };
 
 const findRoutineById = (routines: Routine[], routineId: string | null) => {
   if (!routineId) {
@@ -93,6 +106,43 @@ const upsertRoutine = (routines: Routine[], routine: Routine) => {
 
 const findRoutineByStepId = (routines: Routine[], stepId: string) =>
   routines.find((routine) => routine.steps.some((step) => step.id === stepId));
+
+const buildNoticeId = () =>
+  `error-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const resolveErrorAction = (
+  kind: AppErrorKind,
+  recoverable: boolean,
+): AppErrorAction | undefined => {
+  if (!recoverable) {
+    return undefined;
+  }
+  if (kind === "timer") {
+    return "reset-timer";
+  }
+  if (kind === "data" || kind === "system") {
+    return "reload-data";
+  }
+  return undefined;
+};
+
+const createAppErrorNotice = (payload: AppErrorPayload): AppErrorNotice => ({
+  id: buildNoticeId(),
+  title: payload.message,
+  kind: payload.kind,
+  action: resolveErrorAction(payload.kind, payload.recoverable),
+});
+
+const createLocalErrorNotice = (
+  kind: AppErrorKind,
+  title: string,
+  action?: AppErrorAction,
+): AppErrorNotice => ({
+  id: buildNoticeId(),
+  title,
+  kind,
+  action,
+});
 
 export const appReducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
@@ -213,6 +263,16 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
           ...defaultTimerState,
         },
       };
+    case "app-error":
+      return {
+        ...state,
+        appError: action.error,
+      };
+    case "clear-app-error":
+      return {
+        ...state,
+        appError: undefined,
+      };
     default:
       return state;
   }
@@ -246,6 +306,16 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
         dispatch({ type: "initialize", timerState, routines });
       } catch (error) {
         console.error("Failed to load initial state", error);
+        if (!disposed) {
+          dispatch({
+            type: "app-error",
+            error: createLocalErrorNotice(
+              "data",
+              "初期データの読み込みに失敗しました",
+              "reload-data",
+            ),
+          });
+        }
       }
     };
 
@@ -286,6 +356,12 @@ export const AppStateProvider = ({ children }: { children: ReactNode }) => {
           }),
           listen("timer-stopped", () => {
             dispatch({ type: "timer-stopped" });
+          }),
+          listen<AppErrorPayload>("app-error", (event) => {
+            dispatch({
+              type: "app-error",
+              error: createAppErrorNotice(event.payload),
+            });
           }),
         ]);
 

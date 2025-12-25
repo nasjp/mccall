@@ -86,6 +86,10 @@ impl TimerEngine {
             .and_then(|routine| routine.steps.get(self.current_step_index))
     }
 
+    pub fn current_routine(&self) -> Option<&Routine> {
+        self.routine.as_ref()
+    }
+
     pub fn step_at(&self, index: usize) -> Option<&Step> {
         self.routine
             .as_ref()

@@ -1,5 +1,7 @@
+use crate::app_error::{AppError, AppErrorKind};
 use crate::audio_manager::AudioManager;
 use crate::data_manager::DataManager;
+use crate::events::emit_app_error;
 use crate::menu_bar;
 use crate::runtime_state::RuntimeState;
 use crate::timer_actions;
@@ -88,7 +90,7 @@ fn handle_start(app: &AppHandle) {
     let routines = match data_manager.load_routines() {
         Ok(items) => items,
         Err(err) => {
-            eprintln!("Failed to load routines for global start: {err}");
+            report_error(app, AppError::from(err));
             return;
         }
     };
@@ -106,7 +108,7 @@ fn handle_start(app: &AppHandle) {
     if let Some(routine) = routine {
         if let Err(err) = timer_actions::start_routine(routine, &timer_engine, &runtime_state, app)
         {
-            eprintln!("Failed to start routine from global shortcut: {err}");
+            report_error(app, err);
         }
     }
 
@@ -134,7 +136,7 @@ fn handle_pause_resume(app: &AppHandle) {
     };
 
     if let Err(err) = result {
-        eprintln!("Failed to toggle pause from global shortcut: {err}");
+        report_error(app, err);
     }
 
     menu_bar::sync_menu_bar(app);
@@ -151,7 +153,7 @@ fn handle_skip(app: &AppHandle) {
     }
 
     if let Err(err) = timer_actions::skip_step(&timer_engine, app) {
-        eprintln!("Failed to skip step from global shortcut: {err}");
+        report_error(app, err);
     }
     menu_bar::sync_menu_bar(app);
 }
@@ -163,11 +165,31 @@ fn handle_toggle_mute(app: &AppHandle) {
             manager.toggle_global_mute();
         }
         Err(_) => {
-            eprintln!("Audio state lock failed while toggling mute");
+            report_error(
+                app,
+                AppError::new(
+                    AppErrorKind::System,
+                    "サウンド状態の取得に失敗しました",
+                    true,
+                ),
+            );
             return;
         }
     }
     menu_bar::sync_menu_bar(app);
+}
+
+fn report_error(app: &AppHandle, error: AppError) {
+    emit_app_error(app, error.payload());
+    if let Some(detail) = error.detail() {
+        eprintln!("Global shortcut error ({:?}): {detail}", error.kind());
+    } else {
+        eprintln!(
+            "Global shortcut error ({:?}): {}",
+            error.kind(),
+            error.message()
+        );
+    }
 }
 
 #[cfg(test)]

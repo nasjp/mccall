@@ -8,13 +8,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import { CheckInDialog } from "./components/CheckInDialog";
 import { CheckInPrompt } from "./components/CheckInPrompt";
+import { ErrorNoticeToast } from "./components/ErrorNoticeToast";
 import { RoutineEditor } from "./components/RoutineEditor";
 import { StatsView } from "./components/StatsView";
 import { StepNotificationToast } from "./components/StepNotificationToast";
 import { TimerView } from "./components/TimerView";
 import { useTimerShortcuts } from "./hooks/useTimerShortcuts";
 import { AppStateProvider, useAppState } from "./state/appState";
-import type { CheckInChoice, Routine, Step } from "./types/mccall";
+import type { CheckInChoice, Routine, Step, TimerState } from "./types/mccall";
 
 type NotificationFallback = {
   id: string;
@@ -34,6 +35,7 @@ const AppContent = () => {
   const lastNotifiedStepIdRef = useRef<string | null>(null);
   const notificationPermissionRef = useRef<NotificationPermission>("unknown");
   const fallbackTimeoutRef = useRef<number | null>(null);
+  const errorTimeoutRef = useRef<number | null>(null);
   const [fallbackNotice, setFallbackNotice] =
     useState<NotificationFallback | null>(null);
   const checkInKey = checkInConfig
@@ -84,6 +86,18 @@ const AppContent = () => {
       console.error("Failed to stop timer", error);
     }
   }, []);
+
+  const reloadAppState = useCallback(async () => {
+    try {
+      const [timerState, routines] = await Promise.all([
+        invoke<TimerState>("get_timer_state"),
+        invoke<Routine[]>("load_routines"),
+      ]);
+      dispatch({ type: "initialize", timerState, routines });
+    } catch (error) {
+      console.error("Failed to reload app state", error);
+    }
+  }, [dispatch]);
 
   const upsertRoutine = useCallback(
     async (routine: Routine) => {
@@ -251,8 +265,43 @@ const AppContent = () => {
       if (fallbackTimeoutRef.current !== null) {
         window.clearTimeout(fallbackTimeoutRef.current);
       }
+      if (errorTimeoutRef.current !== null) {
+        window.clearTimeout(errorTimeoutRef.current);
+      }
     };
   }, []);
+
+  const errorAction = state.appError?.action;
+  const errorActionLabel = errorAction
+    ? errorAction === "reload-data"
+      ? "再読み込み"
+      : "停止してリセット"
+    : undefined;
+
+  const handleErrorAction = useCallback(async () => {
+    if (!errorAction) {
+      return;
+    }
+    if (errorAction === "reload-data") {
+      await reloadAppState();
+    } else {
+      await stopTimer();
+    }
+    dispatch({ type: "clear-app-error" });
+  }, [dispatch, errorAction, reloadAppState, stopTimer]);
+
+  useEffect(() => {
+    if (!state.appError) {
+      return;
+    }
+    if (errorTimeoutRef.current !== null) {
+      window.clearTimeout(errorTimeoutRef.current);
+    }
+    const timeout = state.appError.action ? 8000 : 5000;
+    errorTimeoutRef.current = window.setTimeout(() => {
+      dispatch({ type: "clear-app-error" });
+    }, timeout);
+  }, [dispatch, state.appError]);
 
   useTimerShortcuts(
     {
@@ -313,6 +362,13 @@ const AppContent = () => {
         body={checkInBody}
         onDone={() => respondToCheckIn("done")}
         onSkip={() => respondToCheckIn("skip")}
+      />
+      <ErrorNoticeToast
+        open={Boolean(state.appError)}
+        title={state.appError?.title ?? ""}
+        body={state.appError?.body}
+        actionLabel={errorActionLabel}
+        onAction={errorAction ? handleErrorAction : undefined}
       />
       <StepNotificationToast
         open={Boolean(fallbackNotice)}

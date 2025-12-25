@@ -1,19 +1,26 @@
+use crate::app_error::{AppError, AppErrorKind};
+use crate::audio_manager::SoundEvent;
 use crate::data_manager::DataManager;
 use crate::events::{
     emit_step_changed, emit_timer_paused, emit_timer_resumed, emit_timer_stopped, emit_timer_tick,
 };
 use crate::models::{CheckInChoice, Routine, Step};
 use crate::runtime_state::RuntimeState;
+use crate::sound_actions::{build_sound_context, play_sound_for_event};
 use crate::timer_engine::{AdvanceResult, TimerEngine};
 use std::sync::Mutex;
 use tauri::AppHandle;
 
-fn timer_lock_error() -> String {
-    "Timer state lock failed".to_string()
+fn timer_lock_error() -> AppError {
+    AppError::system("タイマー状態の取得に失敗しました")
 }
 
-fn routine_not_found(id: &str) -> String {
-    format!("Routine not found: {id}")
+fn routine_not_found(id: &str) -> AppError {
+    AppError::new(
+        AppErrorKind::Data,
+        format!("ルーチンが見つかりません: {id}"),
+        true,
+    )
 }
 
 fn capture_advance_events(
@@ -44,10 +51,8 @@ pub fn start_routine_by_id(
     timer_engine: &Mutex<TimerEngine>,
     runtime_state: &Mutex<RuntimeState>,
     app: &AppHandle,
-) -> Result<(), String> {
-    let routines = data_manager
-        .load_routines()
-        .map_err(|err| err.to_string())?;
+) -> Result<(), AppError> {
+    let routines = data_manager.load_routines().map_err(AppError::from)?;
     let routine = routines
         .into_iter()
         .find(|item| item.id == routine_id)
@@ -60,12 +65,10 @@ pub fn start_routine(
     timer_engine: &Mutex<TimerEngine>,
     runtime_state: &Mutex<RuntimeState>,
     app: &AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let routine_id = routine.id.clone();
     let mut engine = timer_engine.lock().map_err(|_| timer_lock_error())?;
-    engine
-        .start_routine(routine)
-        .map_err(|err| err.to_string())?;
+    engine.start_routine(routine).map_err(AppError::from)?;
     let step_changed = engine.current_step().cloned().map(|step| {
         let step_index = engine.current_step_index().unwrap_or(0);
         (step, step_index)
@@ -89,39 +92,50 @@ pub fn start_routine(
     Ok(())
 }
 
-pub fn pause_timer(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(), String> {
+pub fn pause_timer(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(), AppError> {
     let mut engine = timer_engine.lock().map_err(|_| timer_lock_error())?;
-    engine.pause().map_err(|err| err.to_string())?;
+    engine.pause().map_err(AppError::from)?;
     drop(engine);
     emit_timer_paused(app);
     Ok(())
 }
 
-pub fn resume_timer(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(), String> {
+pub fn resume_timer(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(), AppError> {
     let mut engine = timer_engine.lock().map_err(|_| timer_lock_error())?;
-    engine.resume().map_err(|err| err.to_string())?;
+    engine.resume().map_err(AppError::from)?;
     drop(engine);
     emit_timer_resumed(app);
     Ok(())
 }
 
-pub fn skip_step(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(), String> {
+pub fn skip_step(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(), AppError> {
     let mut engine = timer_engine.lock().map_err(|_| timer_lock_error())?;
-    let result = engine.skip_current_step().map_err(|err| err.to_string())?;
+    let routine_base_context = build_sound_context(&engine, None);
+    let result = engine.skip_current_step().map_err(AppError::from)?;
     let (step_changed, routine_completed) = capture_advance_events(&engine, &result);
+    let step_sound_context = step_changed
+        .as_ref()
+        .and_then(|(step, _)| build_sound_context(&engine, Some(step)));
+    let routine_sound_context = if routine_completed {
+        routine_base_context
+    } else {
+        None
+    };
     drop(engine);
     if let Some((step, step_index)) = step_changed {
         emit_step_changed(app, step, step_index);
+        play_sound_for_event(app, step_sound_context, SoundEvent::StepTransition);
     }
     if routine_completed {
         emit_timer_stopped(app);
+        play_sound_for_event(app, routine_sound_context, SoundEvent::RoutineCompleted);
     }
     Ok(())
 }
 
-pub fn stop_timer(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(), String> {
+pub fn stop_timer(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(), AppError> {
     let mut engine = timer_engine.lock().map_err(|_| timer_lock_error())?;
-    engine.stop().map_err(|err| err.to_string())?;
+    engine.stop().map_err(AppError::from)?;
     drop(engine);
     emit_timer_stopped(app);
     Ok(())
@@ -131,18 +145,27 @@ pub fn respond_to_check_in(
     choice: CheckInChoice,
     timer_engine: &Mutex<TimerEngine>,
     app: &AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut engine = timer_engine.lock().map_err(|_| timer_lock_error())?;
-    let result = engine
-        .respond_to_check_in(choice)
-        .map_err(|err| err.to_string())?;
+    let routine_base_context = build_sound_context(&engine, None);
+    let result = engine.respond_to_check_in(choice).map_err(AppError::from)?;
     let (step_changed, routine_completed) = capture_advance_events(&engine, &result);
+    let step_sound_context = step_changed
+        .as_ref()
+        .and_then(|(step, _)| build_sound_context(&engine, Some(step)));
+    let routine_sound_context = if routine_completed {
+        routine_base_context
+    } else {
+        None
+    };
     drop(engine);
     if let Some((step, step_index)) = step_changed {
         emit_step_changed(app, step, step_index);
+        play_sound_for_event(app, step_sound_context, SoundEvent::StepTransition);
     }
     if routine_completed {
         emit_timer_stopped(app);
+        play_sound_for_event(app, routine_sound_context, SoundEvent::RoutineCompleted);
     }
     Ok(())
 }

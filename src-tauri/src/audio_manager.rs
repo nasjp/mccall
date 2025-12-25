@@ -41,6 +41,7 @@ pub struct AudioManager {
     global_mute: bool,
     playback_mode: PlaybackMode,
     log: Vec<SoundPlaybackRecord>,
+    failure_notified: bool,
 }
 
 impl AudioManager {
@@ -49,6 +50,7 @@ impl AudioManager {
             global_mute: false,
             playback_mode: PlaybackMode::System,
             log: Vec::new(),
+            failure_notified: false,
         }
     }
 
@@ -57,6 +59,7 @@ impl AudioManager {
             global_mute: false,
             playback_mode,
             log: Vec::new(),
+            failure_notified: false,
         }
     }
 
@@ -148,6 +151,24 @@ impl AudioManager {
 
     pub fn take_logs(&mut self) -> Vec<SoundPlaybackRecord> {
         std::mem::take(&mut self.log)
+    }
+
+    pub fn should_notify_failure(&mut self, record: &SoundPlaybackRecord) -> bool {
+        match record.reason {
+            SoundPlaybackReason::Played => {
+                self.failure_notified = false;
+                false
+            }
+            SoundPlaybackReason::PlaybackFailed => {
+                if self.failure_notified {
+                    false
+                } else {
+                    self.failure_notified = true;
+                    true
+                }
+            }
+            _ => false,
+        }
     }
 
     fn sound_path(&self, scheme: SoundScheme, event: SoundEvent) -> PathBuf {
