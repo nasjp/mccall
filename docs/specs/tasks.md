@@ -200,7 +200,8 @@
 - [x] 18. Playwright UIスナップショットスクリプト追加（Done）
 
 - [x] 19. 固定ウィンドウサイズ(600x700)とレイアウト最適化、Tauriの<select>視認性改善（Done）
-- [ ] 20. select UIスタイルの統一（In Progress）
+- [x] 20. select UIスタイルの統一（Done）
+- [x] 21. selectの立体感を排除しフィールドと統一（Done）
   - Timer/Edit/Statsのスクリーンショットを取得するスクリプトを追加
 
 - [x] 18.1 TauriベースのUIスナップショットへ移行（Done）
