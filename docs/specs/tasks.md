@@ -198,6 +198,9 @@
   - 画面レイアウトの崩れを修正し、Timer/Editor/Statsの配置を安定させる
 
 - [x] 18. Playwright UIスナップショットスクリプト追加（Done）
+
+- [x] 19. 固定ウィンドウサイズ(600x700)とレイアウト最適化、Tauriの<select>視認性改善（Done）
+- [ ] 20. select UIスタイルの統一（In Progress）
   - Timer/Edit/Statsのスクリーンショットを取得するスクリプトを追加
 
 - [x] 18.1 TauriベースのUIスナップショットへ移行（Done）

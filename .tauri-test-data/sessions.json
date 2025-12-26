@@ -2,7 +2,7 @@
   {
     "id": "session-1",
     "routineId": "routine-snapshot",
-    "startedAt": "2025-12-25T00:00:00.000Z",
+    "startedAt": "2025-12-26T00:00:00.000Z",
     "endedAt": null,
     "stepRuns": [],
     "totals": {
@@ -18,7 +18,7 @@
   {
     "id": "session-2",
     "routineId": "routine-snapshot",
-    "startedAt": "2025-12-25T03:00:00.000Z",
+    "startedAt": "2025-12-26T03:00:00.000Z",
     "endedAt": null,
     "stepRuns": [],
     "totals": {
@@ -34,7 +34,7 @@
   {
     "id": "session-3",
     "routineId": "routine-snapshot",
-    "startedAt": "2025-12-25T06:00:00.000Z",
+    "startedAt": "2025-12-26T06:00:00.000Z",
     "endedAt": null,
     "stepRuns": [],
     "totals": {

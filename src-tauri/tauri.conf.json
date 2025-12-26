@@ -13,8 +13,13 @@
     "windows": [
       {
         "title": "mccall",
-        "width": 800,
-        "height": 600
+        "width": 600,
+        "height": 700,
+        "resizable": false,
+        "minWidth": 600,
+        "minHeight": 700,
+        "maxWidth": 600,
+        "maxHeight": 700
       }
     ],
     "security": {

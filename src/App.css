@@ -26,6 +26,12 @@
   --text-body: 14px;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 *,
 *::before,
 *::after {
@@ -34,28 +40,30 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100%;
   background-color: Canvas;
   color: CanvasText;
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 0;
 }
 
 .app {
-  min-height: 100vh;
+  min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  padding: var(--space-24);
+  padding: var(--space-16);
   color: CanvasText;
   background-color: Canvas;
 }
 
 .app__content {
-  width: min(1040px, 100%);
+  width: 100%;
+  max-width: 560px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -114,6 +122,7 @@ body {
 .app__main {
   display: grid;
   min-height: 0;
+  flex: 1;
 }
 
 .app__main--timer {
@@ -123,6 +132,8 @@ body {
 .app__main--editor,
 .app__main--stats {
   align-items: start;
+  overflow-y: auto;
+  padding-bottom: var(--space-16);
 }
 
 .section-title {
@@ -157,12 +168,12 @@ body {
 }
 
 .timer-view {
-  width: min(520px, 100%);
+  width: min(480px, 100%);
   display: grid;
-  gap: var(--space-16);
+  gap: var(--space-12);
   justify-items: center;
   text-align: center;
-  padding: var(--space-24);
+  padding: var(--space-16);
   margin: 0 auto;
 }
 
@@ -535,6 +546,20 @@ body {
   font-size: 13px;
   background-color: Field;
   color: FieldText;
+}
+
+.routine-editor__select {
+  background-color: color-mix(in srgb, Field 92%, Canvas 8%);
+  border-color: color-mix(in srgb, ButtonBorder 70%, CanvasText 30%);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, ButtonBorder 60%, CanvasText 40%);
+}
+
+.routine-editor__input:focus-visible,
+.routine-editor__select:focus-visible,
+.routine-editor__textarea:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
 }
 
 .routine-editor__textarea {
