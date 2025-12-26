@@ -45,7 +45,7 @@ const buildStatItems = (stats: SessionStats): StatItem[] => {
   const skipRate = checkInTotal > 0 ? stats.checkInSkipCount / checkInTotal : 0;
 
   return [
-    { label: "実行回数", value: `${stats.sessionsCount}回` },
+    { label: "実行回数", value: `${stats.cyclesCount}回` },
     { label: "作業時間", value: formatDuration(stats.workSeconds) },
     { label: "休憩時間", value: formatDuration(stats.breakSeconds) },
     { label: "合計時間", value: formatDuration(stats.totalSeconds) },

@@ -96,6 +96,7 @@ pub struct SessionTotals {
 #[serde(rename_all = "camelCase")]
 pub struct SessionStats {
     pub sessions_count: u32,
+    pub cycles_count: u32,
     pub total_seconds: u32,
     pub work_seconds: u32,
     pub break_seconds: u32,

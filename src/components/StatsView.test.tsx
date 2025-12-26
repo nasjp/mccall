@@ -18,6 +18,7 @@ afterEach(() => {
 
 const buildStats = (overrides?: Partial<SessionStats>): SessionStats => ({
   sessionsCount: 0,
+  cyclesCount: 0,
   totalSeconds: 0,
   workSeconds: 0,
   breakSeconds: 0,
@@ -31,6 +32,7 @@ describe("StatsView", () => {
   test("renders today and week stats", async () => {
     const todayStats = buildStats({
       sessionsCount: 2,
+      cyclesCount: 3,
       totalSeconds: 3900,
       workSeconds: 3000,
       breakSeconds: 900,
@@ -40,6 +42,7 @@ describe("StatsView", () => {
     });
     const weekStats = buildStats({
       sessionsCount: 4,
+      cyclesCount: 6,
       totalSeconds: 7200,
       workSeconds: 5400,
       breakSeconds: 1800,
@@ -58,7 +61,7 @@ describe("StatsView", () => {
       name: "今日の統計",
     });
     const today = within(todayCard);
-    expect(today.getByText("2回")).toBeInTheDocument();
+    expect(today.getByText("3回")).toBeInTheDocument();
     expect(today.getByText("50分")).toBeInTheDocument();
     expect(today.getByText("15分")).toBeInTheDocument();
     expect(today.getByText("1時間5分")).toBeInTheDocument();
@@ -69,7 +72,7 @@ describe("StatsView", () => {
       name: "今週の統計",
     });
     const week = within(weekCard);
-    expect(week.getByText("4回")).toBeInTheDocument();
+    expect(week.getByText("6回")).toBeInTheDocument();
     expect(week.getByText("1時間30分")).toBeInTheDocument();
     expect(week.getByText("30分")).toBeInTheDocument();
     expect(week.getByText("2時間")).toBeInTheDocument();

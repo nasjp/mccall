@@ -89,6 +89,7 @@ export interface SessionTotals {
 
 export interface SessionStats {
   sessionsCount: number;
+  cyclesCount: number;
   totalSeconds: number;
   workSeconds: number;
   breakSeconds: number;
