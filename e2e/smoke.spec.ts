@@ -115,6 +115,9 @@ test("タイマー開始と操作が反映される", async ({ page }) => {
 
   await page.getByRole("button", { name: "Skip" }).click();
   await page.getByRole("button", { name: "Stop" }).click();
+  const confirmDialog = page.locator(".confirm-dialog");
+  await expect(confirmDialog).toBeVisible();
+  await confirmDialog.getByRole("button", { name: "Stop" }).click();
 
   invocations = await getInvocations(page);
   const invoked = invocations.map((call) => call.cmd);

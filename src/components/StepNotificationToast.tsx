@@ -1,22 +1,24 @@
+import { memo } from "react";
+
 type StepNotificationToastProps = {
   open: boolean;
   title: string;
   body?: string;
 };
 
-export const StepNotificationToast = ({
-  open,
-  title,
-  body,
-}: StepNotificationToastProps) => {
-  if (!open) {
-    return null;
-  }
+export const StepNotificationToast = memo(
+  ({ open, title, body }: StepNotificationToastProps) => {
+    if (!open) {
+      return null;
+    }
 
-  return (
-    <output className="step-notification" aria-live="polite">
-      <p className="step-notification__title">{title}</p>
-      {body ? <p className="step-notification__body">{body}</p> : null}
-    </output>
-  );
-};
+    return (
+      <output className="step-notification" aria-live="polite">
+        <p className="step-notification__title">{title}</p>
+        {body ? <p className="step-notification__body">{body}</p> : null}
+      </output>
+    );
+  },
+);
+
+StepNotificationToast.displayName = "StepNotificationToast";

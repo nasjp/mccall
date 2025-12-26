@@ -1,9 +1,11 @@
+import { memo } from "react";
+
 type StepBadgeProps = {
   label: string;
   tone?: "default" | "note";
 };
 
-export const StepBadge = ({ label, tone = "default" }: StepBadgeProps) => {
+export const StepBadge = memo(({ label, tone = "default" }: StepBadgeProps) => {
   const className =
     tone === "note"
       ? "timer-view__badge timer-view__badge--note"
@@ -14,4 +16,6 @@ export const StepBadge = ({ label, tone = "default" }: StepBadgeProps) => {
       {label}
     </div>
   );
-};
+});
+
+StepBadge.displayName = "StepBadge";

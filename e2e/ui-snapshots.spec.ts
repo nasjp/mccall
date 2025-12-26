@@ -105,6 +105,7 @@ const timerState: TimerState = {
 
 const statsToday: SessionStats = {
   sessionsCount: 3,
+  cyclesCount: 6,
   totalSeconds: 4200,
   workSeconds: 3300,
   breakSeconds: 900,
@@ -115,6 +116,7 @@ const statsToday: SessionStats = {
 
 const statsWeek: SessionStats = {
   sessionsCount: 12,
+  cyclesCount: 24,
   totalSeconds: 18900,
   workSeconds: 14400,
   breakSeconds: 4500,

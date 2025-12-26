@@ -59,6 +59,7 @@ const defaultTimerState: TimerState = {
 
 const defaultStats: SessionStats = {
   sessionsCount: 0,
+  cyclesCount: 0,
   totalSeconds: 0,
   workSeconds: 0,
   breakSeconds: 0,
@@ -186,8 +187,30 @@ export const installTauriMock = async (
               }
               return null;
             }
-            case "get_session_stats":
-              return stats.today;
+            case "get_session_stats": {
+              const from = typeof args.from === "string" ? args.from : null;
+              const to = typeof args.to === "string" ? args.to : null;
+              const anchor = to ? new Date(to) : new Date();
+              const todayStart = new Date(
+                anchor.getFullYear(),
+                anchor.getMonth(),
+                anchor.getDate(),
+              ).toISOString();
+              const day = anchor.getDay();
+              const diff = (day + 6) % 7;
+              const weekStart = new Date(
+                anchor.getFullYear(),
+                anchor.getMonth(),
+                anchor.getDate() - diff,
+              ).toISOString();
+              if (from === weekStart && from !== todayStart) {
+                return stats.week;
+              }
+              if (from === todayStart) {
+                return stats.today;
+              }
+              return stats.week;
+            }
             case "plugin:event|listen":
               return registerListener(
                 args.event as string,

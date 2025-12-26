@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 type TimerDisplayProps = {
   remainingSeconds: number;
 };
@@ -19,7 +21,7 @@ const buildAriaLabel = (totalSeconds: number) => {
   return `残り${minutes}分${seconds}秒`;
 };
 
-export const TimerDisplay = ({ remainingSeconds }: TimerDisplayProps) => {
+export const TimerDisplay = memo(({ remainingSeconds }: TimerDisplayProps) => {
   const formatted = formatDuration(remainingSeconds);
   const ariaLabel = buildAriaLabel(remainingSeconds);
 
@@ -34,4 +36,6 @@ export const TimerDisplay = ({ remainingSeconds }: TimerDisplayProps) => {
       <span className="visually-hidden">{ariaLabel}</span>
     </div>
   );
-};
+});
+
+TimerDisplay.displayName = "TimerDisplay";

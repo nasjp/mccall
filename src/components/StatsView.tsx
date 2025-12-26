@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import type { SessionStats } from "../types/mccall";
 
 type StatsCardProps = {
@@ -60,7 +60,7 @@ const buildStatItems = (stats: SessionStats): StatItem[] => {
   ];
 };
 
-const StatsCard = ({ title, stats, loading }: StatsCardProps) => {
+const StatsCard = memo(({ title, stats, loading }: StatsCardProps) => {
   const items = useMemo(() => (stats ? buildStatItems(stats) : []), [stats]);
   return (
     <section className="stats-card" aria-label={`${title}の統計`}>
@@ -86,7 +86,9 @@ const StatsCard = ({ title, stats, loading }: StatsCardProps) => {
       )}
     </section>
   );
-};
+});
+
+StatsCard.displayName = "StatsCard";
 
 export const StatsView = () => {
   const [todayStats, setTodayStats] = useState<SessionStats | null>(null);
