@@ -46,6 +46,7 @@ pub fn start_active_session(
         started_at: now.clone(),
         current_step_id: step.id.clone(),
         current_step_started_at: now,
+        current_step_sound_played: false,
         paused_at: None,
         muted_during_session: muted,
     };
@@ -53,13 +54,18 @@ pub fn start_active_session(
     Ok(snapshot)
 }
 
-pub fn update_active_step(data_manager: &DataManager, step: &Step) -> DataResult<()> {
+pub fn update_active_step(
+    data_manager: &DataManager,
+    step: &Step,
+    sound_played: bool,
+) -> DataResult<()> {
     let mut snapshot = match data_manager.load_active_session()? {
         Some(snapshot) => snapshot,
         None => return Ok(()),
     };
     snapshot.current_step_id = step.id.clone();
     snapshot.current_step_started_at = now_rfc3339();
+    snapshot.current_step_sound_played = sound_played;
     snapshot.paused_at = None;
     data_manager.save_active_session(&snapshot)
 }
@@ -156,7 +162,7 @@ pub fn recover_aborted_session(data_manager: &DataManager) -> DataResult<Option<
         ended_at: Some(ended_at.clone()),
         result: StepRunResult::Aborted,
         check_in_result: None,
-        sound_played: false,
+        sound_played: snapshot.current_step_sound_played,
     };
 
     let session = Session {

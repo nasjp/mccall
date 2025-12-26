@@ -2,6 +2,7 @@ use crate::app_error::{AppError, AppErrorKind};
 use crate::audio_manager::AudioManager;
 use crate::data_manager::DataManager;
 use crate::events::emit_app_error;
+use crate::models::CheckInMode;
 use crate::runtime_state::RuntimeState;
 use crate::session_recovery;
 use crate::session_tracker::SessionTracker;
@@ -24,6 +25,7 @@ const MAX_STEP_LABEL_CHARS: usize = 12;
 struct MenuSnapshot {
     is_running: bool,
     is_paused: bool,
+    awaiting_gate: bool,
     remaining_seconds: Option<u32>,
     step_label: Option<String>,
 }
@@ -247,10 +249,21 @@ fn snapshot_from_engine(engine: &TimerEngine) -> MenuSnapshot {
         .ok()
         .map(|remaining| remaining.as_secs().min(u32::MAX as u64) as u32);
     let step_label = engine.current_step().map(|step| step.label.clone());
+    let awaiting_gate = engine
+        .pending_check_in()
+        .map(|(mode, step_index)| {
+            mode == CheckInMode::Gate
+                && engine
+                    .current_step_index()
+                    .map(|current| current == step_index)
+                    .unwrap_or(false)
+        })
+        .unwrap_or(false);
 
     MenuSnapshot {
         is_running: true,
         is_paused: engine.is_paused(),
+        awaiting_gate,
         remaining_seconds,
         step_label,
     }
@@ -320,7 +333,9 @@ fn format_tray_title(snapshot: &MenuSnapshot, muted: bool) -> String {
         .unwrap_or("Step");
     let short_label = truncate_label(step_label, MAX_STEP_LABEL_CHARS);
     let sound_icon = if muted { "🔇" } else { "🔈" };
-    if snapshot.is_paused {
+    if snapshot.awaiting_gate {
+        format!("Check-in {time} {short_label} {sound_icon}")
+    } else if snapshot.is_paused {
         format!("Paused {time} {short_label} {sound_icon}")
     } else {
         format!("{time} {short_label} {sound_icon}")
@@ -370,6 +385,7 @@ mod tests {
         let snapshot = MenuSnapshot {
             is_running: true,
             is_paused: false,
+            awaiting_gate: false,
             remaining_seconds: Some(90),
             step_label: Some("Focus".to_string()),
         };
@@ -381,10 +397,23 @@ mod tests {
         let snapshot = MenuSnapshot {
             is_running: true,
             is_paused: true,
+            awaiting_gate: false,
             remaining_seconds: Some(45),
             step_label: Some("Break".to_string()),
         };
         assert_eq!(format_tray_title(&snapshot, true), "Paused 0:45 Break 🔇");
+    }
+
+    #[test]
+    fn gate_title_prefixes_check_in() {
+        let snapshot = MenuSnapshot {
+            is_running: true,
+            is_paused: false,
+            awaiting_gate: true,
+            remaining_seconds: Some(0),
+            step_label: Some("Note".to_string()),
+        };
+        assert_eq!(format_tray_title(&snapshot, false), "Check-in 0:00 Note 🔈");
     }
 
     #[test]

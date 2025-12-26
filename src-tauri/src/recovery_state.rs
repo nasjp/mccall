@@ -8,6 +8,8 @@ pub struct ActiveSessionSnapshot {
     pub started_at: String,
     pub current_step_id: String,
     pub current_step_started_at: String,
+    #[serde(default)]
+    pub current_step_sound_played: bool,
     pub paused_at: Option<String>,
     pub muted_during_session: bool,
 }

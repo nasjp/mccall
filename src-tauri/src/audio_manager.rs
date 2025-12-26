@@ -189,10 +189,15 @@ impl AudioManager {
     fn play_system_sound(&self, path: &Path) -> Result<(), ()> {
         #[cfg(target_os = "macos")]
         {
-            let status = Command::new("afplay").arg(path).status();
-            match status {
-                Ok(result) if result.success() => Ok(()),
-                _ => Err(()),
+            let child = Command::new("afplay").arg(path).spawn();
+            match child {
+                Ok(mut child) => {
+                    std::thread::spawn(move || {
+                        let _ = child.wait();
+                    });
+                    Ok(())
+                }
+                Err(_) => Err(()),
             }
         }
         #[cfg(not(target_os = "macos"))]

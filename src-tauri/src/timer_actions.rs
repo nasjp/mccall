@@ -169,9 +169,17 @@ pub fn skip_step(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(
         None
     };
     drop(engine);
+    let step_sound_record =
+        play_sound_for_event(app, step_sound_context, SoundEvent::StepTransition);
+    let _ = play_sound_for_event(app, routine_sound_context, SoundEvent::RoutineCompleted);
     if let Some((step, step_index)) = step_changed.as_ref() {
+        let sound_played = step_sound_record
+            .as_ref()
+            .map(|record| record.played)
+            .unwrap_or(false);
         if let Some(manager) = app.try_state::<DataManager>() {
-            session_recovery::update_active_step(&manager, step).map_err(AppError::from)?;
+            session_recovery::update_active_step(&manager, step, sound_played)
+                .map_err(AppError::from)?;
         }
         emit_step_changed(app, step.clone(), *step_index);
     }
@@ -187,9 +195,6 @@ pub fn skip_step(timer_engine: &Mutex<TimerEngine>, app: &AppHandle) -> Result<(
             session_recovery::clear_active_session(&manager).map_err(AppError::from)?;
         }
     }
-    let step_sound_record =
-        play_sound_for_event(app, step_sound_context, SoundEvent::StepTransition);
-    let _ = play_sound_for_event(app, routine_sound_context, SoundEvent::RoutineCompleted);
 
     if let Some(tracker_state) = app.try_state::<Mutex<SessionTracker>>() {
         if let Ok(mut tracker) = tracker_state.lock() {
@@ -300,9 +305,17 @@ pub fn respond_to_check_in(
         None
     };
     drop(engine);
+    let step_sound_record =
+        play_sound_for_event(app, step_sound_context, SoundEvent::StepTransition);
+    let _ = play_sound_for_event(app, routine_sound_context, SoundEvent::RoutineCompleted);
     if let Some((step, step_index)) = step_changed.as_ref() {
+        let sound_played = step_sound_record
+            .as_ref()
+            .map(|record| record.played)
+            .unwrap_or(false);
         if let Some(manager) = app.try_state::<DataManager>() {
-            session_recovery::update_active_step(&manager, step).map_err(AppError::from)?;
+            session_recovery::update_active_step(&manager, step, sound_played)
+                .map_err(AppError::from)?;
         }
         emit_step_changed(app, step.clone(), *step_index);
     }
@@ -318,9 +331,6 @@ pub fn respond_to_check_in(
             session_recovery::clear_active_session(&manager).map_err(AppError::from)?;
         }
     }
-    let step_sound_record =
-        play_sound_for_event(app, step_sound_context, SoundEvent::StepTransition);
-    let _ = play_sound_for_event(app, routine_sound_context, SoundEvent::RoutineCompleted);
 
     if let Some(tracker_state) = app.try_state::<Mutex<SessionTracker>>() {
         if let Ok(mut tracker) = tracker_state.lock() {

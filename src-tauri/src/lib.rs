@@ -161,18 +161,6 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
         };
         drop(engine);
 
-        if let Some(data_manager) = app_handle.try_state::<data_manager::DataManager>() {
-            if let Some((step, _)) = step_changed.as_ref() {
-                let _ = session_recovery::update_active_step(&data_manager, step);
-            }
-            if auto_pause_event {
-                let _ = session_recovery::mark_paused(&data_manager);
-            }
-            if routine_completed {
-                let _ = session_recovery::clear_active_session(&data_manager);
-            }
-        }
-
         let step_sound_record = step_sound_context.as_ref().and_then(|context| {
             play_sound_for_event(
                 &app_handle,
@@ -182,6 +170,22 @@ fn spawn_timer_loop(app_handle: tauri::AppHandle) {
         });
         if let Some(context) = routine_sound_context {
             let _ = play_sound_for_event(&app_handle, Some(context), SoundEvent::RoutineCompleted);
+        }
+
+        if let Some(data_manager) = app_handle.try_state::<data_manager::DataManager>() {
+            if let Some((step, _)) = step_changed.as_ref() {
+                let sound_played = step_sound_record
+                    .as_ref()
+                    .map(|record| record.played)
+                    .unwrap_or(false);
+                let _ = session_recovery::update_active_step(&data_manager, step, sound_played);
+            }
+            if auto_pause_event {
+                let _ = session_recovery::mark_paused(&data_manager);
+            }
+            if routine_completed {
+                let _ = session_recovery::clear_active_session(&data_manager);
+            }
         }
 
         if let Some(tracker_state) = app_handle.try_state::<Mutex<SessionTracker>>() {
